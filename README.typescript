@@ -1,0 +1,3 @@
+Use relative module names for local modules
+include .js where the module is a js one, no prefix if it is a ts one
+

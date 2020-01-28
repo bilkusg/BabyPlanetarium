@@ -1,0 +1,17 @@
+{
+    "extends": "../tsconfig-base.json",
+    "include": [
+        "*",
+        "../vendor/babylon.js/babylon.d.ts",
+        "../vendor/babylon.js/gui/babylon.gui.d.ts"
+    ],
+    "compilerOptions": {
+        "outDir":"../builtes6/babysky",
+        "rootDir": "."
+    },
+    "references": [
+        {"path": "../astro"},
+        {"path":"../babylife"}
+    ]
+
+  }

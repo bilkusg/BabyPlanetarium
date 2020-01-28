@@ -1,0 +1,8 @@
+{
+    "files": [],
+    "references": [
+        {"path": "./astro",},
+        { "path":"./babylife",},
+        {"path":"./babysky",},
+    ]
+}

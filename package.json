@@ -1,0 +1,18 @@
+{
+  "name": "babyplanetarium",
+  "version": "1.0.0",
+  "description": "Planetarium Program using Babylon.js",
+  "main": "bundle.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "ssh://gary@par1.greenwheel.com/home/gary//greenwheel/babyplanetarium"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "systemjs": "^6.1.9"
+  }
+}
