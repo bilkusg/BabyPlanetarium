@@ -24,16 +24,18 @@ export class BabyEntity {
   data:BabyData = {};
   scene:BabyScene;
   children:Set<BabyEntity>;
-  parent:BabyEntity;
+  parent?:BabyEntity;
   dependencies:Set<string>;
   init:BabyFunc;
   update:BabyFunc;
-  constructor(scene:BabyScene,parent:BabyEntity=null) {
+  constructor(scene:BabyScene,parent?:BabyEntity) {
     this.mesh = null;
     this.scene = scene;
     this.children = new Set();
     this.parent = parent;
     this.dependencies = new Set();
+    this.init = (e,s)=>{};
+    this.update = (e,s)=>{};
     if ( this.parent) {
       this.parent.addChild(this);
     } else {

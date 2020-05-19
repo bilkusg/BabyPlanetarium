@@ -31,7 +31,7 @@ export const utToJulianDate = function(year:number,month:number,day:number,hour:
 }
 
 export const dateToJulianDate = function(d:Date) {
-  return utToJulianDate(d.getUTCFullYear(),d.getUTCMonth()+1,d.getUTCDate(),d.getUTCHours(),d.getUTCMinutes(),d.getUTCSeconds())
+  return d.getTime() / (86400000) + 2440587.5;
 }
 
 export const greenwichSiderealHoursFromJd = function(jd:number){ // greenwich mean sidereal time in hours
@@ -151,7 +151,7 @@ export class AstroTime {
     this.minute =  _date.getUTCMinutes();
     this.second = _date.getUTCSeconds();
     this.timezone = _date.getTimezoneOffset()/60;
-    this.julianDate = utToJulianDate(this.year,this.month,this.day,this.hour,this.minute,this.second);
+    this.julianDate = dateToJulianDate(_date);
     this.siderealHoursAtGreenwich = greenwichSiderealHoursFromJd(this.julianDate);
   } 
 }
@@ -163,7 +163,7 @@ export class AstroTime {
 // configuration which is at the north pole at lst 0
 
 // Returns local sidereal time as an angle in degrees
-export const localSiderealDegrees = function(timeAt:AstroTime,longitude:number) {
+export const localSiderealDegrees = function(timeAt:AstroTime|null,longitude:number) {
   if ( timeAt == null) {
     return(longitude);
   }
@@ -175,7 +175,7 @@ export const localSiderealDegrees = function(timeAt:AstroTime,longitude:number) 
 // calculate the hour angle which is measured west from south
 // ra is defined as the local sidereal time when the object's hour angle is 0
 // So objects increase in ra as one goes east. 
-export const localHADegrees = function(timeAt:AstroTime,longitude:number,ra:number) {
+export const localHADegrees = function(timeAt:AstroTime|null,longitude:number,ra:number) {
   let lst = localSiderealDegrees(timeAt,longitude);
   const hourangle = (lst - ra + 360) % 360;
   return hourangle;
@@ -195,8 +195,8 @@ export const rhoThetaPhiToXYZ = function(rho:number,theta:number,phi:number)  {
 // and position the sky correctly by rotating it later, so we optimise that case
 // Azimuth is measured eastwards from north. 
 // At the north pole it is 180 + hourangle
-interface AAXYZ { ra: number, dec: number, timeAt: AstroTime, x:number, y:number, z:number, alt:number, az: number};
-const raDecToAltAzandXYZ =  function(lat:number,longitude:number, ra:number, dec:number, timeAt:AstroTime, sphereAt:number,display:boolean) {
+interface AAXYZ { ra: number, dec: number, timeAt: AstroTime|null, x:number, y:number, z:number, alt:number, az: number};
+const raDecToAltAzandXYZ =  function(lat:number,longitude:number, ra:number, dec:number, timeAt:AstroTime|null, sphereAt:number,display:boolean) {
   let result:AAXYZ;
   const decrads = dec / DegsPerRad;
   const hourangle = localHADegrees(timeAt,longitude,ra);
@@ -390,33 +390,33 @@ import {neptuneData} from "./neptuneData.js";
 
 
 const NutationAndObliquity = function(time:AstroTime){
-	    //var dt = DeltaT()/86400;
-	    //var dt = 64/86400;
-      var jd = time.julianDate;// + dt;
-      var t = (jd -2451545.0)/36525;
-	    var omega = (125.04452 - 1934.136261*t+0.0020708*t*t + (t*t+t)/450000)*RadPerDeg;
-      var L0 = (280.4665 + 36000.7698*t)*RadPerDeg
-      var L1 = (218.3165 + 481267.8813*t)*RadPerDeg
-      var nutation = (-17.20/3600)*Math.sin(omega)-(-1.32/3600)*Math.sin(2*L0)-(0.23/3600)*Math.sin(2*L1)+(0.21/3600)*Math.sin(2*omega)/RadPerDeg;
-	  var obliquity_zero = 23+26.0/60+21.448/3600 -(46.8150/3600)*t -(0.00059/3600)*t*t +(0.001813/3600)*t*t*t; 
-	  var obliquity_delta = (9.20/3600)*Math.cos(omega) + (0.57/3600)*Math.cos(2*L0) +(0.10/3600)*Math.cos(2*L1)-(0.09/3600)*Math.cos(2*omega);
-      var obliquity= obliquity_zero + obliquity_delta;
-	  return {
-	    nutation:nutation,
+  //var dt = DeltaT()/86400;
+  //var dt = 64/86400;
+  const jd = time.julianDate;// + dt;
+  const t = (jd -2451545.0)/36525;
+  const omega = (125.04452 - 1934.136261*t+0.0020708*t*t + (t*t+t)/450000)*RadPerDeg;
+  const L0 = (280.4665 + 36000.7698*t)*RadPerDeg
+  const L1 = (218.3165 + 481267.8813*t)*RadPerDeg
+  const nutation = (-17.20/3600)*Math.sin(omega)-(-1.32/3600)*Math.sin(2*L0)-(0.23/3600)*Math.sin(2*L1)+(0.21/3600)*Math.sin(2*omega)/RadPerDeg;
+	const obliquity_zero = 23+26.0/60+21.448/3600 -(46.8150/3600)*t -(0.00059/3600)*t*t +(0.001813/3600)*t*t*t; 
+	const obliquity_delta = (9.20/3600)*Math.cos(omega) + (0.57/3600)*Math.cos(2*L0) +(0.10/3600)*Math.cos(2*L1)-(0.09/3600)*Math.cos(2*omega);
+  const obliquity= obliquity_zero + obliquity_delta;
+	return {
+	  nutation:nutation,
 		obliquity:obliquity
-	  }
-  }
+	}
+}
 const PlanetPositionEcliptic = function(time:AstroTime,d:any){
-    let data = d.data;
-    var jd = time.julianDate;
-    var data_length = data.length;
-    var t = ((jd -2451545.0)/365250);
-    var v = [0,0,0];
-    var td = data[0].v
-    for(var i=0;i<data_length; i++){
-      var tmp_data = data[i].v;
-      var n = tmp_data[0];
-      var sum = Math.pow(t,Number(tmp_data[1]))*Number(tmp_data[2]) * Math.cos(Number(tmp_data[3]) + Number(tmp_data[4]) * t);
+    const data = d.data;
+    const jd = time.julianDate;
+    const data_length = data.length;
+    const t = ((jd -2451545.0)/365250);
+    let v = [0,0,0];
+    const td = data[0].v
+    for(let i=0;i<data_length; i++){
+      const tmp_data = data[i].v;
+      const n = tmp_data[0];
+      const sum = Math.pow(t,Number(tmp_data[1]))*Number(tmp_data[2]) * Math.cos(Number(tmp_data[3]) + Number(tmp_data[4]) * t);
       v[n] = v[n]  + sum;
     }
     return {
@@ -428,16 +428,16 @@ const PlanetPositionEcliptic = function(time:AstroTime,d:any){
 
 const EclipticToEquatorial = function(from:quatvec.Vec,to:quatvec.Vec){
 
-    var gcx = from.x-to.x; 
-    var gcy = from.y-to.y; 
-    var gcz =from.z-to.z;
+    const gcx = from.x-to.x; 
+    const gcy = from.y-to.y; 
+    const gcz =from.z-to.z;
 
-    var ecl = 23.439281;
-    var eqx = gcx
-    var eqy = gcy*Math.cos(ecl*RadPerDeg) - gcz * Math.sin(ecl*RadPerDeg)
-    var eqz = gcy*Math.sin(ecl*RadPerDeg) + gcz * Math.cos(ecl*RadPerDeg)
+    const ecl = 23.439281;
+    const eqx = gcx
+    const eqy = gcy*Math.cos(ecl*RadPerDeg) - gcz * Math.sin(ecl*RadPerDeg)
+    const eqz = gcy*Math.sin(ecl*RadPerDeg) + gcz * Math.cos(ecl*RadPerDeg)
 
-    var ra = Math.atan2(eqy,eqx)* DegsPerRad;
+    let ra = Math.atan2(eqy,eqx)* DegsPerRad;
     if (ra <0){
       ra = ra%360+360
     }
@@ -445,8 +445,8 @@ const EclipticToEquatorial = function(from:quatvec.Vec,to:quatvec.Vec){
       ra = ra%360
     }
 
-    var dec = Math.atan2(eqz,Math.sqrt(eqx*eqx + eqy*eqy))*DegsPerRad;
-    var distance = Math.sqrt(eqx*eqx + eqy*eqy + eqz*eqz);  
+    const dec = Math.atan2(eqz,Math.sqrt(eqx*eqx + eqy*eqy))*DegsPerRad;
+    const distance = Math.sqrt(eqx*eqx + eqy*eqy + eqz*eqz);  
     return {
       "ra":ra,
       "dec":dec,
@@ -457,7 +457,7 @@ const EclipticToEquatorial = function(from:quatvec.Vec,to:quatvec.Vec){
     };
 }
 const EarthPosition = function(time:AstroTime){
-    var earth_ecliptic = PlanetPositionEcliptic(time,earthData);
+    const earth_ecliptic = PlanetPositionEcliptic(time,earthData);
     return {
       x : earth_ecliptic.x,
       y : earth_ecliptic.y,
@@ -466,177 +466,189 @@ const EarthPosition = function(time:AstroTime){
 }
 
 export const FromKeplerian = function(orbital_elements:any,time:AstroTime){
-     var au = 149597870.691;
+  const au = 149597870.691;
 
-     function deg2rad(d:number){
-       return d*(Math.PI/180);
-     }
+  function deg2rad(d:number){
+    return d*(Math.PI/180);
+  }
 
-     function rad2deg(r:number){
-       return r*(180/Math.PI);
-     }
+  function rad2deg(r:number){
+    return r*(180/Math.PI);
+  }
 
-     var eccentricity = Number(orbital_elements.eccentricity);
-     var gm = 2.9591220828559093*Math.pow(10,-4);
+  let eccentricity = Number(orbital_elements.eccentricity);
+  const gm = 2.9591220828559093*Math.pow(10,-4);
+  
+  if(orbital_elements.time_of_periapsis){
+    var epoch = orbital_elements.time_of_periapsis;
+  }else{
+    var epoch = orbital_elements.epoch;
+  }
      
-     if(orbital_elements.time_of_periapsis){
-       var epoch = orbital_elements.time_of_periapsis;
-     }else{
-       var epoch = orbital_elements.epoch;
-     }
-     
-     const EllipticalOrbit = function(orbital_elements:any,time:AstroTime){
-       if(orbital_elements.semi_major_axis){
-         var semi_major_axis = Number(orbital_elements.semi_major_axis);
-       }else if(orbital_elements.perihelion_distance){
-         var semi_major_axis = (orbital_elements.perihelion_distance)/(1-eccentricity)
-       }
-       var mean_motion = rad2deg(Math.sqrt(gm/(semi_major_axis*semi_major_axis*semi_major_axis)));
-       var elapsed_time = Number(time.julianDate)-Number(epoch);
-       if(orbital_elements.mean_anomaly && orbital_elements.epoch){
-         var mean_anomaly = Number(orbital_elements.mean_anomaly);
-         var l=(mean_motion*elapsed_time)+mean_anomaly;
-       }else if(orbital_elements.time_of_periapsis){
-         var mean_anomaly = mean_motion*elapsed_time;
-         var l=mean_anomaly;
-       }
-       if(l>360){l=l%360}
-       l = deg2rad(l)
-       var u=l
-	    var i = 0;
-       do{
-         var ut=u;
-         var delta_u=(l-u+(eccentricity*Math.sin(u)))/(1- (eccentricity*Math.cos(u)));
-         u=u+delta_u;
-		  if(i>100000){
-		   break
-		 }
-		 i++
-       }while (Math.abs(ut-u)>0.00000001);
-       if(rad2deg(u)<0){u = deg2rad(rad2deg(u)+360)}
-       var orbital_plane= {
-         x:semi_major_axis*(Math.cos(u)-eccentricity),
-         y:semi_major_axis*Math.sqrt(1-Math.pow(eccentricity,2))*Math.sin(u),
-         r:semi_major_axis*(1-(eccentricity*Math.cos(u)))
-       }
-	   return orbital_plane;
-     }
-     
-    const ParabolicOrbit = function(orbital_elements:any,time:AstroTime){
-       var perihelion_distance = Number(orbital_elements.perihelion_distance);
-       var mean_motion = rad2deg(Math.sqrt(gm/(2*perihelion_distance*perihelion_distance*perihelion_distance)));
-       var elapsed_time = Number(time.julianDate)-Number(epoch);
-       if(orbital_elements.mean_anomaly){
-         var mean_anomaly = Number(orbital_elements.mean_anomaly);
-         var l=mean_motion*elapsed_time+mean_anomaly;
-       }else{
-         var mean_anomaly = mean_motion*elapsed_time;
-         var l=mean_anomaly;
-       }
-       if(l>360){
-         l=l%360
-       }
-       if(l<0){
-         l=360-(Math.abs(l)%360)
-       }
-       l = deg2rad(l)
-       var b = Math.atan(2/(3*l));
-	   var g = Math.atan(Math.pow(Math.tan(b/2),1/3));
-     var v = 2.0/Math.tan(2*g)
-     var f = Math.atan(v)*2
-	   var r = (2*perihelion_distance)/(1+Math.cos(f))
-       var orbital_plane= {
-         x:r*Math.cos(f),
-         y:r*Math.sin(f),
-         r:r
-       }
-	   return orbital_plane;
-	 }
+  const EllipticalOrbit = function(orbital_elements:any,time:AstroTime){
+    let semi_major_axis = 0;
+    let mean_anomaly = 0;
+    let l = 0;
+    if(orbital_elements.semi_major_axis){
+      semi_major_axis = Number(orbital_elements.semi_major_axis);
+    }else if(orbital_elements.perihelion_distance){
+      semi_major_axis = (orbital_elements.perihelion_distance)/(1-eccentricity)
+    }
+    let mean_motion = rad2deg(Math.sqrt(gm/(semi_major_axis*semi_major_axis*semi_major_axis)));
+    let elapsed_time = Number(time.julianDate)-Number(epoch);
+    if(orbital_elements.mean_anomaly && orbital_elements.epoch){
+      mean_anomaly = Number(orbital_elements.mean_anomaly);
+      l=(mean_motion*elapsed_time)+mean_anomaly;
+    }else if(orbital_elements.time_of_periapsis){
+      mean_anomaly = mean_motion*elapsed_time;
+      l=mean_anomaly;
+    }
+    if(l>360){l=l%360}
+    l = deg2rad(l)
+    let u=l
+    let  i = 0;
+    let ut = 0;
+    let delta_u = 0;
+    do{
+      ut=u;
+      delta_u=(l-u+(eccentricity*Math.sin(u)))/(1- (eccentricity*Math.cos(u)));
+      u=u+delta_u;
+      if(i>100000){
+        break
+      }
+      i++
+    }while (Math.abs(ut-u)>0.00000001);
+    if(rad2deg(u)<0){u = deg2rad(rad2deg(u)+360)}
+    let orbital_plane= {
+      x:semi_major_axis*(Math.cos(u)-eccentricity),
+      y:semi_major_axis*Math.sqrt(1-Math.pow(eccentricity,2))*Math.sin(u),
+      r:semi_major_axis*(1-(eccentricity*Math.cos(u)))
+    }
+  return orbital_plane;
+  }
+    
+  const ParabolicOrbit = function(orbital_elements:any,time:AstroTime){
+    const perihelion_distance = Number(orbital_elements.perihelion_distance);
+    const mean_motion = rad2deg(Math.sqrt(gm/(2*perihelion_distance*perihelion_distance*perihelion_distance)));
+    const elapsed_time = Number(time.julianDate)-Number(epoch);
+    let mean_anomaly = 0;
+    let l = 0;
+    if(orbital_elements.mean_anomaly){
+      mean_anomaly = Number(orbital_elements.mean_anomaly);
+      l=mean_motion*elapsed_time+mean_anomaly;
+    }else{
+      mean_anomaly = mean_motion*elapsed_time;
+      l=mean_anomaly;
+    }
+    if(l>360){
+      l=l%360
+    }
+    if(l<0){
+      l=360-(Math.abs(l)%360)
+    }
+    l = deg2rad(l)
+    const b = Math.atan(2/(3*l));
+    const g = Math.atan(Math.pow(Math.tan(b/2),1/3));
+    const v = 2.0/Math.tan(2*g)
+    const f = Math.atan(v)*2
+    const r = (2*perihelion_distance)/(1+Math.cos(f))
+    const orbital_plane= {
+      x:r*Math.cos(f),
+      y:r*Math.sin(f),
+      r:r
+    }
+    return orbital_plane;
+  }
 
 
   const HyperbolicOrbit = function(orbital_elements:any,time:AstroTime){
-       if(Math.cosh == undefined){
-         Math.cosh = function(x) {
-          var y = Math.exp(x);
-          return (y + 1 / y) / 2;
-        }
-       }
-       if(Math.sinh == undefined){
-         Math.sinh = function(x) {
-           var y = Math.exp(x);
-           return (y - 1/y) / 2;
-        }
-       }
-        if(orbital_elements.semi_major_axis && orbital_elements.semi_major_axis>0){
-         var semi_major_axis = Number(orbital_elements.semi_major_axis);
-       }else if(orbital_elements.perihelion_distance){
-         var semi_major_axis = orbital_elements.perihelion_distance/(eccentricity-1);
-       }
-       var mean_motion = rad2deg(Math.sqrt(gm/(semi_major_axis*semi_major_axis*semi_major_axis)));
-       var elapsed_time = Number(time.julianDate)-Number(epoch);
-       if(orbital_elements.mean_anomaly && orbital_elements.epoch){
-         var mean_anomaly = Number(orbital_elements.mean_anomaly);
-         var l=mean_motion*elapsed_time+mean_anomaly;
-       }else{
-         var mean_anomaly = mean_motion*elapsed_time;
-         var l=mean_anomaly;
-       }
-       if(l>360){l=l%360}
-       l = deg2rad(l)
-       var u=l;
-       var i=0;
-       do{
-         var ut=u;
-         var delta_u=(l-(eccentricity*Math.sinh(u))+u)/((eccentricity*Math.cosh(u))-1);
-         u=u+delta_u;
-		 if(i++>100000){
-		   break
-		 }
-       }while (Math.abs(ut-u)>0.00001);
-       //if(rad2deg(u)<0){u = deg2rad(rad2deg(u)+360)}
-       var orbital_plane= {
-         x:semi_major_axis*(eccentricity-Math.cosh(u)),
-         y:semi_major_axis*Math.sqrt(Math.pow(eccentricity,2)-1)*Math.sinh(u),
-         r:semi_major_axis*(1-(eccentricity*Math.cosh(u)))
-       }
-	   return orbital_plane;
-     }
+    if(Math.cosh == undefined){
+      Math.cosh = function(x) {
+        const y = Math.exp(x);
+        return (y + 1 / y) / 2;
+      }
+    }
+    if(Math.sinh == undefined){
+      Math.sinh = function(x) {
+        const y = Math.exp(x);
+        return (y - 1/y) / 2;
+      }
+    }
+    let semi_major_axis = 0;
+    if(orbital_elements.semi_major_axis && orbital_elements.semi_major_axis>0){
+      semi_major_axis = Number(orbital_elements.semi_major_axis);
+    }else if(orbital_elements.perihelion_distance){
+      semi_major_axis = orbital_elements.perihelion_distance/(eccentricity-1);
+    }
+    const mean_motion = rad2deg(Math.sqrt(gm/(semi_major_axis*semi_major_axis*semi_major_axis)));
+    const elapsed_time = Number(time.julianDate)-Number(epoch);
+    let mean_anomaly = 0;
+    let l = 0;
+    if(orbital_elements.mean_anomaly && orbital_elements.epoch){
+      mean_anomaly = Number(orbital_elements.mean_anomaly);
+      l=mean_motion*elapsed_time+mean_anomaly;
+    }else{
+      mean_anomaly = mean_motion*elapsed_time;
+      l=mean_anomaly;
+    }
+    if(l>360){l=l%360}
+    l = deg2rad(l)
+    let u=l;
+    let i=0;
+    let ut=0;
+    let delta_u = 0;
+    do{
+      ut=u;
+      delta_u=(l-(eccentricity*Math.sinh(u))+u)/((eccentricity*Math.cosh(u))-1);
+      u=u+delta_u;
+      if(i++>100000){
+        break
+      }
+    } while (Math.abs(ut-u)>0.00001);
+    //if(rad2deg(u)<0){u = deg2rad(rad2deg(u)+360)}
+    let orbital_plane= {
+      x:semi_major_axis*(eccentricity-Math.cosh(u)),
+      y:semi_major_axis*Math.sqrt(Math.pow(eccentricity,2)-1)*Math.sinh(u),
+      r:semi_major_axis*(1-(eccentricity*Math.cosh(u)))
+    }
+    return orbital_plane;
+  }
 
-   
-     var ecliptic_rectangular = function(orbital_elements:any,orbital_plane:any){
-       var lan = deg2rad(Number(orbital_elements.longitude_of_ascending_node));
-       var ap = deg2rad(Number(orbital_elements.argument_of_periapsis));
-       var inc = deg2rad(Number(orbital_elements.inclination));
-       var x  = orbital_plane.x*(Math.cos(lan)*Math.cos(ap)-Math.sin(lan)*Math.cos(inc)*Math.sin(ap))-orbital_plane.y*(Math.cos(lan)*Math.sin(ap)+Math.sin(lan)*Math.cos(inc)*Math.cos(ap));
-       var y = orbital_plane.x*(Math.sin(lan)*Math.cos(ap)+Math.cos(lan)*Math.cos(inc)*Math.sin(ap))-orbital_plane.y*(Math.sin(lan)*Math.sin(ap)-Math.cos(lan)*Math.cos(inc)*Math.cos(ap))
-       var z = orbital_plane.x*Math.sin(inc)*Math.sin(ap)+orbital_plane.y*Math.sin(inc)*Math.cos(ap);
-	   return {
-         x:x,
-         y:y,
-         z:z,
-         orbital_plane:orbital_plane
-       };
-     }
-
-	 if(eccentricity<1.0){
-	   var orbital_plane = EllipticalOrbit(orbital_elements,time);
-	 }else if(eccentricity>1.0){
-	   var orbital_plane = HyperbolicOrbit(orbital_elements,time);
-	 }else if(eccentricity == 1.0){
-      eccentricity = 1.0000001; // Fallback: Parabolic Orbit not working properly. 
-     var orbital_plane = HyperbolicOrbit(orbital_elements,time);
-     //var orbital_plane = ParabolicOrbit(orbital_elements,time); 
-	 }
-     var position = ecliptic_rectangular(orbital_elements,orbital_plane);
-     return {
-       x:position.x,
-       y:position.y,
-       z:position.z,
-       orbital_plane:position.orbital_plane
-     };
+  
+  const ecliptic_rectangular = function(orbital_elements:any,orbital_plane:any){
+    const lan = deg2rad(Number(orbital_elements.longitude_of_ascending_node));
+    const ap = deg2rad(Number(orbital_elements.argument_of_periapsis));
+    const inc = deg2rad(Number(orbital_elements.inclination));
+    const x  = orbital_plane.x*(Math.cos(lan)*Math.cos(ap)-Math.sin(lan)*Math.cos(inc)*Math.sin(ap))-orbital_plane.y*(Math.cos(lan)*Math.sin(ap)+Math.sin(lan)*Math.cos(inc)*Math.cos(ap));
+    const y = orbital_plane.x*(Math.sin(lan)*Math.cos(ap)+Math.cos(lan)*Math.cos(inc)*Math.sin(ap))-orbital_plane.y*(Math.sin(lan)*Math.sin(ap)-Math.cos(lan)*Math.cos(inc)*Math.cos(ap))
+    const z = orbital_plane.x*Math.sin(inc)*Math.sin(ap)+orbital_plane.y*Math.sin(inc)*Math.cos(ap);
+    return {
+      x:x,
+      y:y,
+      z:z,
+      orbital_plane:orbital_plane
+    };
+  }
+  let orbital_plane:any = null;
+  if(eccentricity<1.0){
+      orbital_plane = EllipticalOrbit(orbital_elements,time);
+  }else if(eccentricity>1.0){
+      orbital_plane = HyperbolicOrbit(orbital_elements,time);
+  }else if(eccentricity == 1.0){
+    eccentricity = 1.0000001; // Fallback: Parabolic Orbit not working properly. 
+    orbital_plane = HyperbolicOrbit(orbital_elements,time);
+    //var orbital_plane = ParabolicOrbit(orbital_elements,time); 
+  }
+  const position = ecliptic_rectangular(orbital_elements,orbital_plane);
+    return {
+      x:position.x,
+      y:position.y,
+      z:position.z,
+      orbital_plane:position.orbital_plane
+  };
 } // end of fromKeplerian
 
-var round_angle = function(angle:number){
+const round_angle = function(angle:number){
     if(angle>360){
       angle= angle%360
     }else if(angle<0){
@@ -647,722 +659,718 @@ var round_angle = function(angle:number){
     return angle;
 }
 
-var SunPosition = function(time:AstroTime){
-    //var dt = DeltaT()/86400;
-    //var dt = 64/86400;
-    var jd = time.julianDate;// + dt;
-    var t = (jd -2451545.0)/36525;
-    //geometric_mean_longitude
-    var mean_longitude = 280.46646 + 36000.76983*t + 0.0003032*t*t;
-    //mean anomaly of the Sun
-    var mean_anomaly =  357.52911+ 35999.05029*t - 0.0001537*t*t;
-    //eccentricity of the Earth's orbit
-    var eccentricity = 0.016708634 - 0.000042037*t - 0.0000001267*t*t;
-    //Sun's equation of  the center
-    var equation = (1.914602 - 0.004817*t - 0.000014*t*t)*Math.sin(mean_anomaly*RadPerDeg);
-    equation += (0.019993 - 0.000101*t)*Math.sin(2*mean_anomaly*RadPerDeg);
-    equation += 0.000289 *Math.sin(3*mean_anomaly*RadPerDeg);
-    //true longitude of the Sun
-    var true_longitude = mean_longitude + equation;
-    //true anomary of the Sun
-    var true_anomary = mean_anomaly + equation;
-    //radius vector, distance between center of the Sun and the Earth
-    var radius = (1.000001018*(1-eccentricity*eccentricity))/(1 + eccentricity*Math.cos(true_anomary*RadPerDeg));
+const SunPosition = function(time:AstroTime){
+  //var dt = DeltaT()/86400;
+  //var dt = 64/86400;
+  var jd = time.julianDate;// + dt;
+  var t = (jd -2451545.0)/36525;
+  //geometric_mean_longitude
+  var mean_longitude = 280.46646 + 36000.76983*t + 0.0003032*t*t;
+  //mean anomaly of the Sun
+  var mean_anomaly =  357.52911+ 35999.05029*t - 0.0001537*t*t;
+  //eccentricity of the Earth's orbit
+  var eccentricity = 0.016708634 - 0.000042037*t - 0.0000001267*t*t;
+  //Sun's equation of  the center
+  var equation = (1.914602 - 0.004817*t - 0.000014*t*t)*Math.sin(mean_anomaly*RadPerDeg);
+  equation += (0.019993 - 0.000101*t)*Math.sin(2*mean_anomaly*RadPerDeg);
+  equation += 0.000289 *Math.sin(3*mean_anomaly*RadPerDeg);
+  //true longitude of the Sun
+  var true_longitude = mean_longitude + equation;
+  //true anomary of the Sun
+  var true_anomary = mean_anomaly + equation;
+  //radius vector, distance between center of the Sun and the Earth
+  var radius = (1.000001018*(1-eccentricity*eccentricity))/(1 + eccentricity*Math.cos(true_anomary*RadPerDeg));
 
-    var nao = NutationAndObliquity(time);
-    var nutation = nao.nutation;
-    var obliquity = nao.obliquity;
-    var apparent_longitude = true_longitude + nutation;
-    var longitude = apparent_longitude;
+  var nao = NutationAndObliquity(time);
+  var nutation = nao.nutation;
+  var obliquity = nao.obliquity;
+  var apparent_longitude = true_longitude + nutation;
+  var longitude = apparent_longitude;
 
-    //right asantion of the Sun
-    var ra = Math.atan2(Math.cos(obliquity*RadPerDeg)*Math.sin(longitude*RadPerDeg), Math.cos(longitude*RadPerDeg))
-    ra = round_angle(ra/RadPerDeg);
-    //declination of the Sun
-    var dec = Math.asin(Math.sin(obliquity*RadPerDeg)*Math.sin(longitude*RadPerDeg));
-    dec=dec/RadPerDeg;
-    var distance=radius // *149597870.691;
-    //rectanger
-    var x = distance*Math.cos(longitude*RadPerDeg);
-    var y = distance*(Math.sin(longitude*RadPerDeg)*Math.cos(obliquity*RadPerDeg));
-    var z = distance*(Math.sin(longitude*RadPerDeg)*Math.sin(obliquity*RadPerDeg));
-    return {
-    ra : ra,
-    dec : dec,
-    distance : distance,
-    x : x,
-    y : y,
-    z : z
-    }
+  //right asantion of the Sun
+  var ra = Math.atan2(Math.cos(obliquity*RadPerDeg)*Math.sin(longitude*RadPerDeg), Math.cos(longitude*RadPerDeg))
+  ra = round_angle(ra/RadPerDeg);
+  //declination of the Sun
+  var dec = Math.asin(Math.sin(obliquity*RadPerDeg)*Math.sin(longitude*RadPerDeg));
+  dec=dec/RadPerDeg;
+  var distance=radius // *149597870.691;
+  //rectanger
+  var x = distance*Math.cos(longitude*RadPerDeg);
+  var y = distance*(Math.sin(longitude*RadPerDeg)*Math.cos(obliquity*RadPerDeg));
+  var z = distance*(Math.sin(longitude*RadPerDeg)*Math.sin(obliquity*RadPerDeg));
+  return {
+  ra : ra,
+  dec : dec,
+  distance : distance,
+  x : x,
+  y : y,
+  z : z
+  }
 }
 
-var MoonPosition = function(time:AstroTime){
-	    //var dt = DeltaT()/86400;
-	    //var dt = 64/86400;
-      var jd = time.julianDate; // + dt;
-      //ephemeris days from the epch J2000.0
-      var t = (jd -2451545.0)/36525;
-  	  var t2 = t*t;
-  	  var t3 = t*t*t;
-  	  var t4 = t*t*t*t;
-      var e = 1- 0.002516*t - 0.0000074*t2;
-      var L1 = (218.3164477 + 481267.88123421*t - 0.0015786*t2 + t3/538841 - t4/65194000);
-      L1 = round_angle(L1)*RadPerDeg;
-  	  var D0 = (297.8501921 + 445267.1114034*t - 0.0018819*t2 + t3/545868 - t4/113065000);
-      D0 = round_angle(D0)*RadPerDeg;
-      var M0 = (357.5291092 + 35999.0502909*t - 0.0001536*t2 + t3/24490000);
-      M0 = round_angle(M0)*RadPerDeg;
-      var M1 = (134.9633964 + 477198.8675055*t + 0.0087414*t2 + t3/69699 - t4/14712000);
-      M1 = round_angle(M1)*RadPerDeg;
-      var F0 = (93.2720950 + 483202.0175233*t - 0.0036539 *t2 - t3/3526000 + t4/863310000);
-      F0 = round_angle(F0)*RadPerDeg;
-      var A1 = (119.75 + 131.849*t);
-      A1 = round_angle(A1)*RadPerDeg;
-      var A2 = (53.09 + 479264.290*t);
-      A2 = round_angle(A2)*RadPerDeg;
-      var A3 = (313.45 + 481266.484*t);
-      A3 = round_angle(A3)*RadPerDeg;
+const MoonPosition = function(time:AstroTime){
+  //var dt = DeltaT()/86400;
+  //var dt = 64/86400;
+  var jd = time.julianDate; // + dt;
+  //ephemeris days from the epch J2000.0
+  var t = (jd -2451545.0)/36525;
+  var t2 = t*t;
+  var t3 = t*t*t;
+  var t4 = t*t*t*t;
+  var e = 1- 0.002516*t - 0.0000074*t2;
+  var L1 = (218.3164477 + 481267.88123421*t - 0.0015786*t2 + t3/538841 - t4/65194000);
+  L1 = round_angle(L1)*RadPerDeg;
+  var D0 = (297.8501921 + 445267.1114034*t - 0.0018819*t2 + t3/545868 - t4/113065000);
+  D0 = round_angle(D0)*RadPerDeg;
+  var M0 = (357.5291092 + 35999.0502909*t - 0.0001536*t2 + t3/24490000);
+  M0 = round_angle(M0)*RadPerDeg;
+  var M1 = (134.9633964 + 477198.8675055*t + 0.0087414*t2 + t3/69699 - t4/14712000);
+  M1 = round_angle(M1)*RadPerDeg;
+  var F0 = (93.2720950 + 483202.0175233*t - 0.0036539 *t2 - t3/3526000 + t4/863310000);
+  F0 = round_angle(F0)*RadPerDeg;
+  var A1 = (119.75 + 131.849*t);
+  A1 = round_angle(A1)*RadPerDeg;
+  var A2 = (53.09 + 479264.290*t);
+  A2 = round_angle(A2)*RadPerDeg;
+  var A3 = (313.45 + 481266.484*t);
+  A3 = round_angle(A3)*RadPerDeg;
 
-      var SigmaL = function(){
-        var result =0;
-        var terms = LunaTerms.LR;
-        var terms_length = terms.length;
-        for(var i = 0; i< terms_length;i++){
-          var coef = terms[i][4];
-          var multi = [terms[i][0],terms[i][1],terms[i][2],terms[i][3]]
-          if(Math.abs(multi[1]) == 1){
-            var e_coef = e;
-          }else if(Math.abs(multi[1]) == 2){
-            var e_coef = e*e;
-          }else{
-            var e_coef = 1;
-          }
-          var asin = multi[0]*D0 + multi[1]*M0 + multi[2]*M1 + multi[3]*F0;
-          result += coef * Math.sin(asin) * e_coef;
-        }
-        result += 3958*Math.sin(A1)
-        result += 1962*Math.sin(L1-F0)
-        result += 318*Math.sin(A2)
-
-        return result;
+  var SigmaL = function(){
+    var result =0;
+    var terms = LunaTerms.LR;
+    var terms_length = terms.length;
+    for(var i = 0; i< terms_length;i++){
+      var coef = terms[i][4];
+      var multi = [terms[i][0],terms[i][1],terms[i][2],terms[i][3]]
+      if(Math.abs(multi[1]) == 1){
+        var e_coef = e;
+      }else if(Math.abs(multi[1]) == 2){
+        var e_coef = e*e;
+      }else{
+        var e_coef = 1;
       }
+      var asin = multi[0]*D0 + multi[1]*M0 + multi[2]*M1 + multi[3]*F0;
+      result += coef * Math.sin(asin) * e_coef;
+    }
+    result += 3958*Math.sin(A1)
+    result += 1962*Math.sin(L1-F0)
+    result += 318*Math.sin(A2)
 
-      var SigmaR = function(){
-        var result =0;
-        var terms = LunaTerms.LR;
-        var terms_length = terms.length;
-        for(var i = 0; i< terms_length;i++){
-          var coef = terms[i][5];
-          var multi = [terms[i][0],terms[i][1],terms[i][2],terms[i][3]]
-          if(Math.abs(multi[1]) == 1){
-            var e_coef = e;
-          }else if(Math.abs(multi[1]) == 2){
-            var e_coef = e*e;
-          }else{
-            var e_coef = 1;
-          }
-          var acos = multi[0]*D0 + multi[1]*M0 + multi[2]*M1 + multi[3]*F0
-          result += coef * Math.cos(acos) * e_coef;
-        }
-        return result;
+    return result;
+  }
+
+  var SigmaR = function(){
+    var result =0;
+    var terms = LunaTerms.LR;
+    var terms_length = terms.length;
+    for(var i = 0; i< terms_length;i++){
+      var coef = terms[i][5];
+      var multi = [terms[i][0],terms[i][1],terms[i][2],terms[i][3]]
+      if(Math.abs(multi[1]) == 1){
+        var e_coef = e;
+      }else if(Math.abs(multi[1]) == 2){
+        var e_coef = e*e;
+      }else{
+        var e_coef = 1;
       }
+      var acos = multi[0]*D0 + multi[1]*M0 + multi[2]*M1 + multi[3]*F0
+      result += coef * Math.cos(acos) * e_coef;
+    }
+    return result;
+  }
 
-      var SigmaB = function(){
-        var result =0;
-        var terms = LunaTerms.B;
-        var terms_length = terms.length;
-        for(var i = 0; i< terms_length;i++){
-          var coef = terms[i][4];
-          var multi = [terms[i][0],terms[i][1],terms[i][2],terms[i][3]]
-          if(Math.abs(multi[1]) == 1){
-            var e_coef = e;
-          }else if(Math.abs(multi[1]) == 2){
-            var e_coef = e*e;
-          }else{
-            var e_coef = 1;
-          }
-          var asin = multi[0]*D0 + multi[1]*M0 + multi[2]*M1 + multi[3]*F0
-          result += coef * Math.sin(asin) * e_coef;
-        }
-        result += -2235*Math.sin(L1)
-        result += 382*Math.sin(A3)
-        result += 175*Math.sin(A1-F0)
-        result += 175*Math.sin(A1+F0)
-        result += 127*Math.sin(L1-M1)
-        result += -115*Math.sin(L1+M1)
-        return result;
+  var SigmaB = function(){
+    var result =0;
+    var terms = LunaTerms.B;
+    var terms_length = terms.length;
+    for(var i = 0; i< terms_length;i++){
+      var coef = terms[i][4];
+      var multi = [terms[i][0],terms[i][1],terms[i][2],terms[i][3]]
+      if(Math.abs(multi[1]) == 1){
+        var e_coef = e;
+      }else if(Math.abs(multi[1]) == 2){
+        var e_coef = e*e;
+      }else{
+        var e_coef = 1;
       }
+      var asin = multi[0]*D0 + multi[1]*M0 + multi[2]*M1 + multi[3]*F0
+      result += coef * Math.sin(asin) * e_coef;
+    }
+    result += -2235*Math.sin(L1)
+    result += 382*Math.sin(A3)
+    result += 175*Math.sin(A1-F0)
+    result += 175*Math.sin(A1+F0)
+    result += 127*Math.sin(L1-M1)
+    result += -115*Math.sin(L1+M1)
+    return result;
+  }
 
-      var LunaTerms = {
-        LR: [
-          [0,  0,  1,  0,  6288774, -20905335],
-          [2,  0, -1,  0,  1274027,  -3699111],
-          [2,  0,  0,  0,   658314,  -2955968],
-          [0,  0,  2,  0,   213618,   -569925],
-          [0,  1,  0,  0,  -185116,     48888],
-          [0,  0,  0,  2,  -114332,     -3149],
-          [2,  0, -2,  0,    58793,    246158],
-          [2, -1, -1,  0,    57066,   -152138],
-          [2,  0,  1,  0,    53322,   -170733],
-          [2, -1,  0,  0,    45758,   -204586],
-          [0,  1, -1,  0,   -40923,   -129620],
-          [1,  0,  0,  0,   -34720,    108743],
-          [0,  1,  1,  0,   -30383,    104755],
-          [2,  0,  0, -2,    15327,     10321],
-          [0,  0,  1,  2,   -12528,         0],
-          [0,  0,  1, -2,    10980,     79661],
-          [4,  0, -1,  0,    10675,    -34782],
-          [0,  0,  3,  0,    10034,    -23210],
-          [4,  0, -2,  0,     8548,    -21636],
-          [2,  1, -1,  0,    -7888,     24208],
-          [2,  1,  0,  0,    -6766,     30824],
-          [1,  0, -1,  0,    -5163,     -8379],
-          [1,  1,  0,  0,     4987,    -16675],
-          [2, -1,  1,  0,     4036,    -12831],
-          [2,  0,  2,  0,     3994,    -10445],
-          [4,  0,  0,  0,     3861,    -11650],
-          [2,  0, -3,  0,     3665,     14403],
-          [0,  1, -2,  0,    -2689,     -7003],
-          [2,  0, -1,  2,    -2602,         0],
-          [2, -1, -2,  0,     2390,     10056],
-          [1,  0,  1,  0,    -2348,      6322],
-          [2, -2,  0,  0,     2236,     -9884],
-          [0,  1,  2,  0,    -2120,      5751],
-          [0,  2,  0,  0,    -2069,         0],
-          [2, -2, -1,  0,     2048,     -4950],
-          [2,  0,  1, -2,    -1773,      4130],
-          [2,  0,  0,  2,    -1595,         0],
-          [4, -1, -1,  0,     1215,     -3958],
-          [0,  0,  2,  2,    -1110,         0],
-          [3,  0, -1,  0,     -892,      3258],
-          [2,  1,  1,  0,     -810,      2616],
-          [4, -1, -2,  0,      759,     -1897],
-          [0,  2, -1,  0,     -713,     -2117],
-          [2,  2, -1,  0,     -700,      2354],
-          [2,  1, -2,  0,      691,         0],
-          [2, -1,  0, -2,      596,         0],
-          [4,  0,  1,  0,      549,     -1423],
-          [0,  0,  4,  0,      537,     -1117],
-          [4, -1,  0,  0,      520,     -1571],
-          [1,  0, -2,  0,     -487,     -1739],
-          [2,  1,  0, -2,     -399,         0],
-          [0,  0,  2, -2,     -381,     -4421],
-          [1,  1,  1,  0,      351,         0],
-          [3,  0, -2,  0,     -340,         0],
-          [4,  0, -3,  0,      330,         0],
-          [2, -1,  2,  0,      327,         0],
-          [0,  2,  1,  0,     -323,      1165],
-          [1,  1, -1,  0,      299,         0],
-          [2,  0,  3,  0,      294,         0],
-          [2,  0, -1, -2,        0,      8752]
-        ],
-        B:[
-          [0,  0,  0,  1, 5128122],
-          [0,  0,  1,  1,  280602],
-          [0,  0,  1, -1,  277693],
-          [2,  0,  0, -1,  173237],
-          [2,  0, -1,  1,   55413],
-          [2,  0, -1, -1,   46271],
-          [2,  0,  0,  1,   32573],
-          [0,  0,  2,  1,   17198],
-          [2,  0,  1, -1,    9266],
-          [0,  0,  2, -1,    8822],
-          [2, -1,  0, -1,    8216],
-          [2,  0, -2, -1,    4324],
-          [2,  0,  1,  1,    4200],
-          [2,  1,  0, -1,   -3359],
-          [2, -1, -1,  1,    2463],
-          [2, -1,  0,  1,    2211],
-          [2, -1, -1, -1,    2065],
-          [0,  1, -1, -1,   -1870],
-          [4,  0, -1, -1,    1828],
-          [0,  1,  0,  1,   -1794],
-          [0,  0,  0,  3,   -1749],
-          [0,  1, -1,  1,   -1565],
-          [1,  0,  0,  1,   -1491],
-          [0,  1,  1,  1,   -1475],
-          [0,  1,  1, -1,   -1410],
-          [0,  1,  0, -1,   -1344],
-          [1,  0,  0, -1,   -1335],
-          [0,  0,  3,  1,    1107],
-          [4,  0,  0, -1,    1021],
-          [4,  0, -1,  1,     833],
-          [0,  0,  1, -3,     777],
-          [4,  0, -2,  1,     671],
-          [2,  0,  0, -3,     607],
-          [2,  0,  2, -1,     596],
-          [2, -1,  1, -1,     491],
-          [2,  0, -2,  1,    -451],
-          [0,  0,  3, -1,     439],
-          [2,  0,  2,  1,     422],
-          [2,  0, -3, -1,     421],
-          [2,  1, -1,  1,    -366],
-          [2,  1,  0,  1,    -351],
-          [4,  0,  0,  1,     331],
-          [2, -1,  1,  1,     315],
-          [2, -2,  0, -1,     302],
-          [0,  0,  1,  3,    -283],
-          [2,  1,  1, -1,    -229],
-          [1,  1,  0, -1,     223],
-          [1,  1,  0,  1,     223],
-          [0,  1, -2, -1,    -220],
-          [2,  1, -1, -1,    -220],
-          [1,  0,  1,  1,    -185],
-          [2, -1, -2, -1,     181],
-          [0,  1,  2,  1,    -177],
-          [4,  0, -2, -1,     176],
-          [4, -1, -1, -1,     166],
-          [1,  0,  1, -1,    -164],
-          [4,  0,  1, -1,     132],
-          [1,  0, -1, -1,    -119],
-          [4, -1,  0, -1,     115],
-          [2, -2,  0,  1,     107]
-        ]
+  var LunaTerms = {
+    LR: [
+      [0,  0,  1,  0,  6288774, -20905335],
+      [2,  0, -1,  0,  1274027,  -3699111],
+      [2,  0,  0,  0,   658314,  -2955968],
+      [0,  0,  2,  0,   213618,   -569925],
+      [0,  1,  0,  0,  -185116,     48888],
+      [0,  0,  0,  2,  -114332,     -3149],
+      [2,  0, -2,  0,    58793,    246158],
+      [2, -1, -1,  0,    57066,   -152138],
+      [2,  0,  1,  0,    53322,   -170733],
+      [2, -1,  0,  0,    45758,   -204586],
+      [0,  1, -1,  0,   -40923,   -129620],
+      [1,  0,  0,  0,   -34720,    108743],
+      [0,  1,  1,  0,   -30383,    104755],
+      [2,  0,  0, -2,    15327,     10321],
+      [0,  0,  1,  2,   -12528,         0],
+      [0,  0,  1, -2,    10980,     79661],
+      [4,  0, -1,  0,    10675,    -34782],
+      [0,  0,  3,  0,    10034,    -23210],
+      [4,  0, -2,  0,     8548,    -21636],
+      [2,  1, -1,  0,    -7888,     24208],
+      [2,  1,  0,  0,    -6766,     30824],
+      [1,  0, -1,  0,    -5163,     -8379],
+      [1,  1,  0,  0,     4987,    -16675],
+      [2, -1,  1,  0,     4036,    -12831],
+      [2,  0,  2,  0,     3994,    -10445],
+      [4,  0,  0,  0,     3861,    -11650],
+      [2,  0, -3,  0,     3665,     14403],
+      [0,  1, -2,  0,    -2689,     -7003],
+      [2,  0, -1,  2,    -2602,         0],
+      [2, -1, -2,  0,     2390,     10056],
+      [1,  0,  1,  0,    -2348,      6322],
+      [2, -2,  0,  0,     2236,     -9884],
+      [0,  1,  2,  0,    -2120,      5751],
+      [0,  2,  0,  0,    -2069,         0],
+      [2, -2, -1,  0,     2048,     -4950],
+      [2,  0,  1, -2,    -1773,      4130],
+      [2,  0,  0,  2,    -1595,         0],
+      [4, -1, -1,  0,     1215,     -3958],
+      [0,  0,  2,  2,    -1110,         0],
+      [3,  0, -1,  0,     -892,      3258],
+      [2,  1,  1,  0,     -810,      2616],
+      [4, -1, -2,  0,      759,     -1897],
+      [0,  2, -1,  0,     -713,     -2117],
+      [2,  2, -1,  0,     -700,      2354],
+      [2,  1, -2,  0,      691,         0],
+      [2, -1,  0, -2,      596,         0],
+      [4,  0,  1,  0,      549,     -1423],
+      [0,  0,  4,  0,      537,     -1117],
+      [4, -1,  0,  0,      520,     -1571],
+      [1,  0, -2,  0,     -487,     -1739],
+      [2,  1,  0, -2,     -399,         0],
+      [0,  0,  2, -2,     -381,     -4421],
+      [1,  1,  1,  0,      351,         0],
+      [3,  0, -2,  0,     -340,         0],
+      [4,  0, -3,  0,      330,         0],
+      [2, -1,  2,  0,      327,         0],
+      [0,  2,  1,  0,     -323,      1165],
+      [1,  1, -1,  0,      299,         0],
+      [2,  0,  3,  0,      294,         0],
+      [2,  0, -1, -2,        0,      8752]
+    ],
+    B:[
+      [0,  0,  0,  1, 5128122],
+      [0,  0,  1,  1,  280602],
+      [0,  0,  1, -1,  277693],
+      [2,  0,  0, -1,  173237],
+      [2,  0, -1,  1,   55413],
+      [2,  0, -1, -1,   46271],
+      [2,  0,  0,  1,   32573],
+      [0,  0,  2,  1,   17198],
+      [2,  0,  1, -1,    9266],
+      [0,  0,  2, -1,    8822],
+      [2, -1,  0, -1,    8216],
+      [2,  0, -2, -1,    4324],
+      [2,  0,  1,  1,    4200],
+      [2,  1,  0, -1,   -3359],
+      [2, -1, -1,  1,    2463],
+      [2, -1,  0,  1,    2211],
+      [2, -1, -1, -1,    2065],
+      [0,  1, -1, -1,   -1870],
+      [4,  0, -1, -1,    1828],
+      [0,  1,  0,  1,   -1794],
+      [0,  0,  0,  3,   -1749],
+      [0,  1, -1,  1,   -1565],
+      [1,  0,  0,  1,   -1491],
+      [0,  1,  1,  1,   -1475],
+      [0,  1,  1, -1,   -1410],
+      [0,  1,  0, -1,   -1344],
+      [1,  0,  0, -1,   -1335],
+      [0,  0,  3,  1,    1107],
+      [4,  0,  0, -1,    1021],
+      [4,  0, -1,  1,     833],
+      [0,  0,  1, -3,     777],
+      [4,  0, -2,  1,     671],
+      [2,  0,  0, -3,     607],
+      [2,  0,  2, -1,     596],
+      [2, -1,  1, -1,     491],
+      [2,  0, -2,  1,    -451],
+      [0,  0,  3, -1,     439],
+      [2,  0,  2,  1,     422],
+      [2,  0, -3, -1,     421],
+      [2,  1, -1,  1,    -366],
+      [2,  1,  0,  1,    -351],
+      [4,  0,  0,  1,     331],
+      [2, -1,  1,  1,     315],
+      [2, -2,  0, -1,     302],
+      [0,  0,  1,  3,    -283],
+      [2,  1,  1, -1,    -229],
+      [1,  1,  0, -1,     223],
+      [1,  1,  0,  1,     223],
+      [0,  1, -2, -1,    -220],
+      [2,  1, -1, -1,    -220],
+      [1,  0,  1,  1,    -185],
+      [2, -1, -2, -1,     181],
+      [0,  1,  2,  1,    -177],
+      [4,  0, -2, -1,     176],
+      [4, -1, -1, -1,     166],
+      [1,  0,  1, -1,    -164],
+      [4,  0,  1, -1,     132],
+      [1,  0, -1, -1,    -119],
+      [4, -1,  0, -1,     115],
+      [2, -2,  0,  1,     107]
+    ]
+  }
+
+  var sigma_l = SigmaL();
+  var sigma_r = SigmaR();
+  var sigma_b = SigmaB();
+
+
+  var true_longitude = (L1/RadPerDeg)%360  + (sigma_l)/1000000
+  var latitude = (sigma_b)/1000000
+  var distance = 385000560 + sigma_r; // in meters
+  var nao = NutationAndObliquity(time)
+  var nutation = nao.nutation;
+  var obliquity = nao.obliquity;
+  var apparent_longitude = true_longitude + nutation;
+  var longitude = apparent_longitude;
+
+  var ra = Math.atan2(Math.sin(longitude*RadPerDeg)*Math.cos(obliquity*RadPerDeg)-Math.tan(latitude*RadPerDeg)*Math.sin(obliquity*RadPerDeg),Math.cos(longitude*RadPerDeg))/RadPerDeg;
+  ra = round_angle(ra);
+  var dec = Math.asin(Math.sin(latitude*RadPerDeg)*Math.cos(obliquity*RadPerDeg) + Math.cos(latitude*RadPerDeg)*Math.sin(obliquity*RadPerDeg)*Math.sin(longitude*RadPerDeg))/RadPerDeg;
+
+  //rectanger
+  var x = distance*Math.cos(latitude*RadPerDeg)*Math.cos(longitude*RadPerDeg);
+  var y = distance*Math.cos(latitude*RadPerDeg)*Math.sin(longitude*RadPerDeg);
+  var z = distance*Math.sin(latitude*RadPerDeg);
+
+  var p = {
+    x:x,
+    y:y,
+    z:z
+  }
+
+  // equatiorial horizontal parallax
+  var parallax = Math.asin(6378140/distance)/RadPerDeg
+
+  return {
+    time : time,
+    position: {
+      equatorial: {
+        ra:ra,
+        dec:dec,
+        distance:distance,
+        parallax:parallax
+      },
+      ecliptic: {
+        center:"Earth",
+        x:p.x,
+        y:p.y,
+        z:p.z
       }
+    },        
+    phase : function(){
+      var now = time.date;
+      var jd = time.julianDate;
+      var date_first = new Date(time.year, 0, 1, 0, 0, 0);
+      var date_last = new Date(time.year, 11, 31, 11, 59, 59, 999);
+      var since_new_year = (now.getTime() - date_first.getTime())/(date_last.getTime()-date_first.getTime());
+      var y = time.year+since_new_year;
 
-      var sigma_l = SigmaL();
-      var sigma_r = SigmaR();
-      var sigma_b = SigmaB();
+      var k = Math.floor((y-2000) * 12.3685);
+      var t = k/1236.85;
+      var t2 = t*t;
+      var t3 = t*t*t;
+      var t4 = t*t*t*t;
+      var jde0 = 2451550.09766 + 29.530588861*k + 0.00015437*t2 - 0.000000150*t3 + 0.00000000073*t4;
 
+      var e = 1-0.002516*t - 0.0000074*t2;
+      e = round_angle(e);
+      //Sun's mean anomary at the time;
+      var m0 = 2.5534 + 29.10535670*k - 0.0000014*t2 - 0.00000011*t3;
+      m0 = round_angle(m0);
+      //Moon's mean anomary at the time;
+      var m1 = 201.5643 + 385.81693528*k + 0.0107582*t2 + 0.00001238*t3 - 0.000000011*t4; 
+      m1 = round_angle(m1);
+      //Moon's argument of latitude
+      var f = 160.7108 + 390.67050284*k - 0.0016118*t2-0.00000227*t3 + 0.000000011*t4;
+      f = round_angle(f);
+      //Longitude of the ascending node of lunar orbit
+      var omega = 124.7746 -  1.56375588*k + 0.0020672*t2 + 0.00000215*t3;
+      omega = round_angle(omega);
 
-      var true_longitude = (L1/RadPerDeg)%360  + (sigma_l)/1000000
-      var latitude = (sigma_b)/1000000
-      var distance = 385000560 + sigma_r; // in meters
-  	  var nao = NutationAndObliquity(time)
-  	  var nutation = nao.nutation;
-  	  var obliquity = nao.obliquity;
-  	  var apparent_longitude = true_longitude + nutation;
-      var longitude = apparent_longitude;
+      var c1 = 0;
+      c1 = c1 - 0.40720 * Math.sin(m1*RadPerDeg);
+      c1 = c1 + 0.17241 * e * Math.sin(m0*RadPerDeg);
+      c1 = c1 + 0.01608 * Math.sin(2*m1*RadPerDeg);
+      c1 = c1 + 0.01039 * Math.sin(2*f*RadPerDeg);
+      c1 = c1 + 0.00739 * e * Math.sin((m1-m0)*RadPerDeg);
+      c1 = c1 - 0.00514 * e * Math.sin((m1+m0)*RadPerDeg);
+      c1 = c1 + 0.00208 * e * e * Math.sin(2*m0*RadPerDeg); 
+      c1 = c1 - 0.00111 * Math.sin((m1-2*f)*RadPerDeg)
+      c1 = c1 - 0.00057 * Math.sin((m1+2*f)*RadPerDeg)
+      c1 = c1 + 0.00056 * e * Math.sin((2*m1+m0)*RadPerDeg);
+      c1 = c1 - 0.00042 * Math.sin(3*m1*RadPerDeg);
+      c1 = c1 + 0.00042 * e * Math.sin((m0+2*f)*RadPerDeg)
+      c1 = c1 + 0.00038 * e * Math.sin((m0-2*f)*RadPerDeg)
+      c1 = c1 - 0.00024 * e * Math.sin((2*m1-m0)*RadPerDeg);
+      c1 = c1 - 0.00017 * Math.sin(omega*RadPerDeg);
+      c1 = c1 - 0.00007 * Math.sin((m1+2*m0)*RadPerDeg);
+      c1 = c1 + 0.00004 * Math.sin((2*m1-2*f)*RadPerDeg);
+      c1 = c1 + 0.00004 * Math.sin(3*m0 *RadPerDeg);
+      c1 = c1 + 0.00003 * Math.sin((m1+m0-2*f)*RadPerDeg);
+      c1 = c1 + 0.00003 * Math.sin((2*m1+2*f)*RadPerDeg);
+      c1 = c1 - 0.00003 * Math.sin((m1+m0+2*f)*RadPerDeg);
+      c1 = c1 + 0.00003 * Math.sin((m1-m0+2*f)*RadPerDeg);
+      c1 = c1 - 0.00002 * Math.sin((m1-m0-2*f)*RadPerDeg);
+      c1 = c1 - 0.00002 * Math.sin((3*m1+m0)*RadPerDeg);
+      c1 = c1 + 0.00002 * Math.sin(4*m1*RadPerDeg);
 
-	    var ra = Math.atan2(Math.sin(longitude*RadPerDeg)*Math.cos(obliquity*RadPerDeg)-Math.tan(latitude*RadPerDeg)*Math.sin(obliquity*RadPerDeg),Math.cos(longitude*RadPerDeg))/RadPerDeg;
-      ra = round_angle(ra);
-      var dec = Math.asin(Math.sin(latitude*RadPerDeg)*Math.cos(obliquity*RadPerDeg) + Math.cos(latitude*RadPerDeg)*Math.sin(obliquity*RadPerDeg)*Math.sin(longitude*RadPerDeg))/RadPerDeg;
+      var a1 = 299.77 + 0.107408*k-0.009173*t2;
+      var a2 = 251.88 + 0.016321*k;
+      var a3 = 251.83 + 26.651886*k;
+      var a4 = 349.42 + 36.412478 *k; 
+      var a5 =  84.66 + 18.206239*k;
+      var a6 =  141.74+53.303771*k;
+      var a7 =  207.14+2.453732*k;
+      var a8 =  154.84+7.306860*k;
+      var a9 =  34.52+27.261239*k;
+      var a10 =  207.19+0.121824*k;
+      var a11 =  291.34+1.844379*k;
+      var a12 =  161.72+24.198154*k;
+      var a13 =  239.56+25.513099*k;
+      var a14 =  331.55+3.592518*k;
 
-      //rectanger
-      var x = distance*Math.cos(latitude*RadPerDeg)*Math.cos(longitude*RadPerDeg);
-      var y = distance*Math.cos(latitude*RadPerDeg)*Math.sin(longitude*RadPerDeg);
-      var z = distance*Math.sin(latitude*RadPerDeg);
-
-      var p = {
-        x:x,
-        y:y,
-        z:z
-      }
-
-      // equatiorial horizontal parallax
-      var parallax = Math.asin(6378140/distance)/RadPerDeg
-
-      return {
-        time : time,
-        position: {
-          equatorial: {
-            ra:ra,
-            dec:dec,
-            distance:distance,
-            parallax:parallax
-          },
-          ecliptic: {
-            center:"Earth",
-            x:p.x,
-            y:p.y,
-            z:p.z
-          }
-        },        
-        phase : function(){
-          var now = time.date;
-          var jd = time.julianDate;
-          var date_first = new Date(time.year, 0, 1, 0, 0, 0);
-          var date_last = new Date(time.year, 11, 31, 11, 59, 59, 999);
-          var since_new_year = (now.getTime() - date_first.getTime())/(date_last.getTime()-date_first.getTime());
-          var y = time.year+since_new_year;
-
-          var k = Math.floor((y-2000) * 12.3685);
-          var t = k/1236.85;
-          var t2 = t*t;
-          var t3 = t*t*t;
-          var t4 = t*t*t*t;
-          var jde0 = 2451550.09766 + 29.530588861*k + 0.00015437*t2 - 0.000000150*t3 + 0.00000000073*t4;
-
-          var e = 1-0.002516*t - 0.0000074*t2;
-          e = round_angle(e);
-          //Sun's mean anomary at the time;
-          var m0 = 2.5534 + 29.10535670*k - 0.0000014*t2 - 0.00000011*t3;
-          m0 = round_angle(m0);
-          //Moon's mean anomary at the time;
-          var m1 = 201.5643 + 385.81693528*k + 0.0107582*t2 + 0.00001238*t3 - 0.000000011*t4; 
-          m1 = round_angle(m1);
-          //Moon's argument of latitude
-          var f = 160.7108 + 390.67050284*k - 0.0016118*t2-0.00000227*t3 + 0.000000011*t4;
-          f = round_angle(f);
-          //Longitude of the ascending node of lunar orbit
-          var omega = 124.7746 -  1.56375588*k + 0.0020672*t2 + 0.00000215*t3;
-          omega = round_angle(omega);
-
-          var c1 = 0;
-          c1 = c1 - 0.40720 * Math.sin(m1*RadPerDeg);
-          c1 = c1 + 0.17241 * e * Math.sin(m0*RadPerDeg);
-          c1 = c1 + 0.01608 * Math.sin(2*m1*RadPerDeg);
-          c1 = c1 + 0.01039 * Math.sin(2*f*RadPerDeg);
-          c1 = c1 + 0.00739 * e * Math.sin((m1-m0)*RadPerDeg);
-          c1 = c1 - 0.00514 * e * Math.sin((m1+m0)*RadPerDeg);
-          c1 = c1 + 0.00208 * e * e * Math.sin(2*m0*RadPerDeg); 
-          c1 = c1 - 0.00111 * Math.sin((m1-2*f)*RadPerDeg)
-          c1 = c1 - 0.00057 * Math.sin((m1+2*f)*RadPerDeg)
-          c1 = c1 + 0.00056 * e * Math.sin((2*m1+m0)*RadPerDeg);
-          c1 = c1 - 0.00042 * Math.sin(3*m1*RadPerDeg);
-          c1 = c1 + 0.00042 * e * Math.sin((m0+2*f)*RadPerDeg)
-          c1 = c1 + 0.00038 * e * Math.sin((m0-2*f)*RadPerDeg)
-          c1 = c1 - 0.00024 * e * Math.sin((2*m1-m0)*RadPerDeg);
-          c1 = c1 - 0.00017 * Math.sin(omega*RadPerDeg);
-          c1 = c1 - 0.00007 * Math.sin((m1+2*m0)*RadPerDeg);
-          c1 = c1 + 0.00004 * Math.sin((2*m1-2*f)*RadPerDeg);
-          c1 = c1 + 0.00004 * Math.sin(3*m0 *RadPerDeg);
-          c1 = c1 + 0.00003 * Math.sin((m1+m0-2*f)*RadPerDeg);
-          c1 = c1 + 0.00003 * Math.sin((2*m1+2*f)*RadPerDeg);
-          c1 = c1 - 0.00003 * Math.sin((m1+m0+2*f)*RadPerDeg);
-          c1 = c1 + 0.00003 * Math.sin((m1-m0+2*f)*RadPerDeg);
-          c1 = c1 - 0.00002 * Math.sin((m1-m0-2*f)*RadPerDeg);
-          c1 = c1 - 0.00002 * Math.sin((3*m1+m0)*RadPerDeg);
-          c1 = c1 + 0.00002 * Math.sin(4*m1*RadPerDeg);
-
-          var a1 = 299.77 + 0.107408*k-0.009173*t2;
-          var a2 = 251.88 + 0.016321*k;
-          var a3 = 251.83 + 26.651886*k;
-          var a4 = 349.42 + 36.412478 *k; 
-          var a5 =  84.66 + 18.206239*k;
-          var a6 =  141.74+53.303771*k;
-          var a7 =  207.14+2.453732*k;
-          var a8 =  154.84+7.306860*k;
-          var a9 =  34.52+27.261239*k;
-          var a10 =  207.19+0.121824*k;
-          var a11 =  291.34+1.844379*k;
-          var a12 =  161.72+24.198154*k;
-          var a13 =  239.56+25.513099*k;
-          var a14 =  331.55+3.592518*k;
-
-          var c2 = 0;
-          c2 = c2 + 0.000325 *Math.sin(a1*RadPerDeg);
-          c2 = c2 + 0.000165 *Math.sin(a2*RadPerDeg);
-          c2 = c2 + 0.000164 *Math.sin(a3*RadPerDeg);
-          c2 = c2 + 0.000126 *Math.sin(a4*RadPerDeg);
-          c2 = c2 + 0.000110 *Math.sin(a5*RadPerDeg);
-          c2 = c2 + 0.000062 *Math.sin(a6*RadPerDeg);
-          c2 = c2 + 0.000060 *Math.sin(a7*RadPerDeg);
-          c2 = c2 + 0.000056 *Math.sin(a8*RadPerDeg);
-          c2 = c2 + 0.000047 *Math.sin(a9*RadPerDeg);
-          c2 = c2 + 0.000042 *Math.sin(a10*RadPerDeg);
-          c2 = c2 + 0.000040 *Math.sin(a11*RadPerDeg);
-          c2 = c2 + 0.000037 *Math.sin(a12*RadPerDeg);
-          c2 = c2 + 0.000035 *Math.sin(a13*RadPerDeg);
-          c2 = c2 + 0.000023 *Math.sin(a14*RadPerDeg);
-          var jde = jde0 + c1 + c2;
-          var phase_of_the_moon = jd - jde;
-          return phase_of_the_moon;
-        }
-      } //end  return;
+      var c2 = 0;
+      c2 = c2 + 0.000325 *Math.sin(a1*RadPerDeg);
+      c2 = c2 + 0.000165 *Math.sin(a2*RadPerDeg);
+      c2 = c2 + 0.000164 *Math.sin(a3*RadPerDeg);
+      c2 = c2 + 0.000126 *Math.sin(a4*RadPerDeg);
+      c2 = c2 + 0.000110 *Math.sin(a5*RadPerDeg);
+      c2 = c2 + 0.000062 *Math.sin(a6*RadPerDeg);
+      c2 = c2 + 0.000060 *Math.sin(a7*RadPerDeg);
+      c2 = c2 + 0.000056 *Math.sin(a8*RadPerDeg);
+      c2 = c2 + 0.000047 *Math.sin(a9*RadPerDeg);
+      c2 = c2 + 0.000042 *Math.sin(a10*RadPerDeg);
+      c2 = c2 + 0.000040 *Math.sin(a11*RadPerDeg);
+      c2 = c2 + 0.000037 *Math.sin(a12*RadPerDeg);
+      c2 = c2 + 0.000035 *Math.sin(a13*RadPerDeg);
+      c2 = c2 + 0.000023 *Math.sin(a14*RadPerDeg);
+      var jde = jde0 + c1 + c2;
+      var phase_of_the_moon = jd - jde;
+      return phase_of_the_moon;
+    }
+  } //end  return;
 } // end moon position
-
-
 // Earth data for reference       "orbital_period":"365.256363004",   "radius":"6371.0", "mass":"5.9736E+24"
+export class TimeAndEarthPosition {
+  time:AstroTime|null = null;
+  position:quatvec.Vec| null = null;
+}
+export class SolarSystemValues {
+  ra?:number;
+  dec?:number;
+  distance?:number;
+  phase?:number;
+  mag?:number;
+  coords:any = null;
+  npcoords:any = null;
+  nprotateBy:any = null;
+  npsunlightdirection:any = null;
+  scaledRadius?:number;
+  scaledDistance?:number;
+
+}
+export function EarthPositionAtTime(t:AstroTime) {
+  let p = new TimeAndEarthPosition();
+  p.time = t;
+  p.position = EarthPosition(t);
+  return p;
+}
+export class SolarSystemObject {
+  bf:string = "";
+  proper:string = "";
+  spect:string = "";
+  ci:string = "";
+  con:string = "";
+  lum:string = "";
+  k:number = 0;
+  color?:Array<number>;
+  radius:number = 0;
+  mass:number = 0;
+  orbital_period?:number = 0;
+  orbitData:any;
+  baseMag:number=0;
+  rotateDaily:number = 0;
+  axis:any;
+
+  calculateMagnitude(phaseAngle:number,r_mag_factor:number,delta_mag_factor:number,distance_mag_factor:number):number{
+    return this.baseMag + distance_mag_factor;
+  }
+  calculate(t:TimeAndEarthPosition,lat:number,lng:number,auScaling:number){
+    let eclipticPosition = PlanetPositionEcliptic(t.time as AstroTime,this.orbitData);
+    let equatorial = EclipticToEquatorial(eclipticPosition,(t.position as quatvec.Vec));
+    let phaseAngle= litPointRotationCalc((t.position as quatvec.Vec),equatorial).phase;
+    let auFromObs = quatvec.vlength(equatorial)/metersPerAu;
+    let auFromSun = quatvec.vlength(eclipticPosition)/metersPerAu;
+    let r_mag_factor = 5.0 * Math.log10(auFromSun);
+    let delta_mag_factor = 5.0 * Math.log10(auFromObs);
+    let distance_mag_factor = r_mag_factor+delta_mag_factor;
     
-
-  export class TimeAndEarthPosition {
-    time:AstroTime;
-    position:quatvec.Vec;
-  }
-  export class SolarSystemValues {
-    ra:number;
-    dec:number;
-    distance:number;
-    phase:number;
-    mag:number;
-    coords:any = null;
-    npcoords:any = null;
-    nprotateBy:any = null;
-    npsunlightdirection:any = null;
-    scaledRadius:number;
-    scaledDistance:number;
-
-  }
-  export function EarthPositionAtTime(t:AstroTime) {
-    let p = new TimeAndEarthPosition();
-    p.time = t;
-    p.position = EarthPosition(t);
-    return p;
-  }
-  export class SolarSystemObject {
-    bf:string;
-    proper:string;
-    spect:string;
-    ci:string;
-    con:string;
-    lum:string;
-    k:number;
-    color:Array<number>;
-    radius:number;
-    mass:number;
-    orbital_period:number;
-    orbitData:any;
-    baseMag:number;
-    rotateDaily:number;
-    axis:any;
-
-    calculateMagnitude = function(phaseAngle:number,r_mag_factor:number,delta_mag_factor:number,distance_mag_factor:number):number{
-      return this.baseMag + distance_mag_factor;
-    }
-    calculate = function(t:TimeAndEarthPosition,lat:number,lng:number,auScaling:number){
-      let eclipticPosition = PlanetPositionEcliptic(t.time,this.orbitData);
-      let equatorial = EclipticToEquatorial(eclipticPosition,t.position);
-      let phaseAngle= litPointRotationCalc(t.position,equatorial).phase;
-      let auFromObs = quatvec.vlength(equatorial)/metersPerAu;
-      let auFromSun = quatvec.vlength(eclipticPosition)/metersPerAu;
-      let r_mag_factor = 5.0 * Math.log10(auFromSun);
-      let delta_mag_factor = 5.0 * Math.log10(auFromObs);
-      let distance_mag_factor = r_mag_factor+delta_mag_factor;
-     
-      let mag:number = this.calculateMagnitude(phaseAngle,r_mag_factor,delta_mag_factor,distance_mag_factor);
-      let result = new SolarSystemValues();
-        result.ra=equatorial.ra,
-        result.dec = equatorial.dec,
-        result.distance=equatorial.distance,
-        result.phase=phaseAngle,
-        result.mag=mag,
-        result.coords=raDecToAltAzandXYZ(lat,lng,equatorial.ra,equatorial.dec,t.time,equatorial.distance*auScaling,false), 
-        result.npcoords=raDecToAltAzandXYZ(90,0,equatorial.ra,equatorial.dec,null,equatorial.distance*auScaling,false),
-        result.nprotateBy=0;
-        result.scaledRadius = this.radius * auScaling;
-        result.scaledDistance = result.distance * auScaling;
-      
-      return result;
-    }
-  }
-
-  export const sun = new SolarSystemObject();
-  sun.orbital_period = 1;  
-  sun.radius=696340000;
-  sun.mass=1.989E30;
-  sun.bf="Sol";
-  sun.proper = "Sun";
-  sun.spect="G2V";
-  sun.ci="";
-  sun.con="Sol";
-  sun.lum= "";
-  sun.k = 5778;
-  sun.color = [255,255,255];
-  sun.baseMag = -22;
-  sun.calculate = function(t:TimeAndEarthPosition,lat:number,lng:number,auScaling:number) {
-      let eclipticPosition = {x:0,y:0,z:0};
-      let equatorial = EclipticToEquatorial(eclipticPosition,t.position);
-      let result = new SolarSystemValues();
+    let mag:number = this.calculateMagnitude(phaseAngle,r_mag_factor,delta_mag_factor,distance_mag_factor);
+    let result = new SolarSystemValues();
       result.ra=equatorial.ra,
       result.dec = equatorial.dec,
       result.distance=equatorial.distance,
-      result.mag=-22,
+      result.phase=phaseAngle,
+      result.mag=mag,
       result.coords=raDecToAltAzandXYZ(lat,lng,equatorial.ra,equatorial.dec,t.time,equatorial.distance*auScaling,false), 
       result.npcoords=raDecToAltAzandXYZ(90,0,equatorial.ra,equatorial.dec,null,equatorial.distance*auScaling,false),
-      result.npsunlightdirection=raDecToAltAzandXYZ(90,0,equatorial.ra,equatorial.dec,null,10,false), 
       result.nprotateBy=0;
       result.scaledRadius = this.radius * auScaling;
       result.scaledDistance = result.distance * auScaling;
-      return result;
+    
+    return result;
   }
-  
-  export const mercury = new SolarSystemObject();
-  mercury.bf="Mercury";
-  mercury.proper = "Mercury";
-  mercury.spect="G2V";
-  mercury.ci="";
-  mercury.con="Sol";
-  mercury.lum= "";
-  mercury.k = 4000;
-  mercury.color = [255,255,255];
-  mercury.orbital_period = 87.969, 
-  mercury.radius = 2439700;
-  mercury.mass = 3.3022E+23;
-  mercury.orbitData = mercuryData;
-  mercury.calculateMagnitude = function(phaseAngle:number,r_mag_factor:number,delta_mag_factor:number,distance_mag_factor:number){
-   let phaseAngleFactor = (((((-3.0334e-12 * phaseAngle + 1.6893e-09) * phaseAngle - 3.4265e-07) * phaseAngle + 3.3644e-05) *phaseAngle -1.6336e-03) * phaseAngle + 6.3280e-02) * phaseAngle;
-    return -0.613 + distance_mag_factor + phaseAngleFactor;
-  }
-  mercury.axis = {ra: 281.01,dec:61.45};
-  mercury.rotateDaily = 6.14;
+}
+
+export const sun = new SolarSystemObject();
+sun.orbital_period = 1;  
+sun.radius=696340000;
+sun.mass=1.989E30;
+sun.bf="Sol";
+sun.proper = "Sun";
+sun.spect="G2V";
+sun.ci="";
+sun.con="Sol";
+sun.lum= "";
+sun.k = 5778;
+sun.color = [255,255,255];
+sun.baseMag = -22;
+sun.calculate = function(t:TimeAndEarthPosition,lat:number,lng:number,auScaling:number) {
+  let eclipticPosition = {x:0,y:0,z:0};
+  let equatorial = EclipticToEquatorial(eclipticPosition,t.position as quatvec.Vec);
+  let result = new SolarSystemValues();
+  result.ra=equatorial.ra,
+  result.dec = equatorial.dec,
+  result.distance=equatorial.distance,
+  result.mag=-22,
+  result.coords=raDecToAltAzandXYZ(lat,lng,equatorial.ra,equatorial.dec,t.time,equatorial.distance*auScaling,false), 
+  result.npcoords=raDecToAltAzandXYZ(90,0,equatorial.ra,equatorial.dec,null,equatorial.distance*auScaling,false),
+  result.npsunlightdirection=raDecToAltAzandXYZ(90,0,equatorial.ra,equatorial.dec,null,10,false), 
+  result.nprotateBy=0;
+  result.scaledRadius = this.radius * auScaling;
+  result.scaledDistance = result.distance * auScaling;
+  return result;
+}
+
+export const mercury = new SolarSystemObject();
+mercury.bf="Mercury";
+mercury.proper = "Mercury";
+mercury.spect="G2V";
+mercury.ci="";
+mercury.con="Sol";
+mercury.lum= "";
+mercury.k = 4000;
+mercury.color = [255,255,255];
+mercury.orbital_period = 87.969, 
+mercury.radius = 2439700;
+mercury.mass = 3.3022E+23;
+mercury.orbitData = mercuryData;
+mercury.calculateMagnitude = function(phaseAngle:number,r_mag_factor:number,delta_mag_factor:number,distance_mag_factor:number){
+  let phaseAngleFactor = (((((-3.0334e-12 * phaseAngle + 1.6893e-09) * phaseAngle - 3.4265e-07) * phaseAngle + 3.3644e-05) *phaseAngle -1.6336e-03) * phaseAngle + 6.3280e-02) * phaseAngle;
+  return -0.613 + distance_mag_factor + phaseAngleFactor;
+}
+mercury.axis = {ra: 281.01,dec:61.45};
+mercury.rotateDaily = 6.14;
 
 
-  export const venus = new SolarSystemObject();
-  venus.orbital_period= 224.70069;  
-  venus.radius=6051800;
-  venus.mass= 4.8685E+24;
-  venus.calculateMagnitude = function(phaseAngle:number,r_mag_factor:number,delta_mag_factor:number,distance_mag_factor:number){
-    let phaseAngleFactor:number;
-    if ( phaseAngle < 163.7 ) {
-      phaseAngleFactor = -1.044E-03 * phaseAngle + 3.687E-04 * phaseAngle*phaseAngle - 2.814E-06 *  phaseAngle*phaseAngle*phaseAngle + 8.938E-09 * phaseAngle*phaseAngle*phaseAngle*phaseAngle;
-    } else {
-      phaseAngleFactor = 236.05828 + 4.384 - 2.81914E+00 * phaseAngle + 8.39034E-03 * phaseAngle*phaseAngle;
+export const venus = new SolarSystemObject();
+venus.orbital_period= 224.70069;  
+venus.radius=6051800;
+venus.mass= 4.8685E+24;
+venus.calculateMagnitude = function(phaseAngle:number,r_mag_factor:number,delta_mag_factor:number,distance_mag_factor:number){
+  let phaseAngleFactor:number;
+  if ( phaseAngle < 163.7 ) {
+    phaseAngleFactor = -1.044E-03 * phaseAngle + 3.687E-04 * phaseAngle*phaseAngle - 2.814E-06 *  phaseAngle*phaseAngle*phaseAngle + 8.938E-09 * phaseAngle*phaseAngle*phaseAngle*phaseAngle;
+  } else {
+    phaseAngleFactor = 236.05828 + 4.384 - 2.81914E+00 * phaseAngle + 8.39034E-03 * phaseAngle*phaseAngle;
+  }
+  return -4.384 + distance_mag_factor + phaseAngleFactor;
+} 
+venus.bf="Venus";
+venus.proper = "Venus";
+venus.spect="G2V";
+venus.ci="";
+venus.con="Sol";
+venus.lum= "";
+venus.k = 5778;
+venus.color = [255,255,255];
+venus.axis = {ra: 272.76,dec:67.16};
+venus.rotateDaily = -1.48;
+venus.orbitData = venusData;
+
+export const mars = new SolarSystemObject();
+
+mars.orbital_period=686.971;
+mars.radius=3396200;
+mars.mass=6.4185E+23;
+mars.orbitData = marsData;
+mars.baseMag = -0.367
+mars.bf="Mars";
+mars.proper = "Mars";
+mars.spect="G2V";
+mars.ci="";
+mars.con="Sol";
+mars.lum= "";
+mars.k = 2500;
+mars.color = [255,200,200];
+mars.axis = {ra: 317.67,dec:52.88};
+mars.rotateDaily = 350.89;
+
+
+
+export const jupiter = new SolarSystemObject();
+jupiter.orbital_period=4331.572;
+jupiter.radius=71492000;
+jupiter.mass=1.8986E+27;
+jupiter.baseMag = -9.428;
+jupiter.bf="Jupiter";
+jupiter.proper = "Jupiter";
+jupiter.spect="G2V";
+jupiter.ci="";
+jupiter.con="Sol";
+jupiter.lum= "";
+jupiter.k = 5778;
+jupiter.color = [255,255,255];
+jupiter.axis = {ra: 268.06,dec:64.5};
+jupiter.rotateDaily = 870.54;
+jupiter.orbitData = jupiterData;
+export const saturn = new SolarSystemObject();
+saturn.orbital_period=10759.22; 
+saturn.radius=60268000;
+saturn.mass=5.6846E+26;
+saturn.baseMag = -8.9;
+saturn.bf="Saturn";
+saturn.proper = "Saturn";
+saturn.spect="G2V";
+saturn.ci="";
+saturn.con="Sol";
+saturn.lum= "";
+saturn.k = 5600;
+saturn.color = [255,255,200];
+saturn.axis = {ra: 40.6,dec:83.54};
+saturn.rotateDaily = 810.79;
+saturn.orbitData = saturnData;
+
+export const uranus = new SolarSystemObject();
+uranus.orbital_period=30799.095;  
+uranus.radius=25559000;
+uranus.mass=8.6810E+25;
+uranus.baseMag = -7.1;
+uranus.bf="Uranus";
+uranus.proper = "Uranus";
+uranus.spect="G2V";
+uranus.ci="";
+uranus.con="Sol";
+uranus.lum= "";
+uranus.k = 5600;
+uranus.color = [200,255,200];
+uranus.axis = {ra: 257.31,dec:-15.18};
+uranus.rotateDaily = -501.16;
+uranus.orbitData = uranusData;
+
+export const neptune = new SolarSystemObject();
+neptune.orbital_period=60190;  
+neptune.radius=24764000;
+neptune.mass=1.0243E+26;
+neptune.baseMag = -7.0;
+neptune.bf="Neptune";
+neptune.proper = "Neptune";
+neptune.spect="G2V";
+neptune.ci="";
+neptune.con="Sol";
+neptune.lum= "";
+neptune.k = 10000;
+neptune.color = [200,255,255];
+neptune.axis = {ra: 299.4,dec:42.95};
+neptune.rotateDaily = 536.31;
+neptune.orbitData = neptuneData;
+
+export const moon = new SolarSystemObject();
+
+moon.bf="Luna";
+moon.proper = "Moon";
+moon.baseMag=-100;
+moon.spect="G2V";
+moon.ci="";
+moon.con="Sol";
+moon.lum= "";
+moon.radius = 1737100;
+moon.k = 5778;
+moon.color = [255,255,255];
+moon.calculate = function(t:TimeAndEarthPosition,lat:number,lng:number,auScaling:number):SolarSystemValues{
+// This function also calculates how much to rotate the moon's disk by in order to take into account the inclination of its orbit to 
+// the celestial equator. Note that this has nothing to do with the typically much larger rotation which occurs as a result of the inclination
+// of the celestial equator to the horizon.
+//
+// We move the moon a small distance along its orbit, and calculate the angle of that movement vs the moon's equator.
+// It's not a perfect calculation, but it's close enough until we find something better
+  let moonPosNow = MoonPosition(t.time as AstroTime);
+  let eclipticPosition = moonPosNow.position.ecliptic;
+  let equatorial = moonPosNow.position.equatorial;
+  let phaseAngle = ((29.53059 + moonPosNow.phase()) / 29.53059) % 1 ;
+  let moonPosSoon = MoonPosition(new AstroTime(new Date((t.time as AstroTime).date.getTime()+3600*1000)));
+  let equatorialSoon = moonPosSoon.position.equatorial;
+  let npcoords = raDecToAltAzandXYZ(90,0,equatorial.ra,equatorial.dec,null,equatorial.distance*auScaling,false);
+  let futnpcoords = raDecToAltAzandXYZ(90,0,equatorialSoon.ra,equatorialSoon.dec,null,equatorialSoon.distance*auScaling,false);
+  let p = npcoords.alt - futnpcoords.alt;
+  let q = (npcoords.az - futnpcoords.az) * Math.cos(npcoords.alt/DegsPerRad);
+  let nprotateBy = Math.atan2(p,q) * DegsPerRad;
+  let result = new SolarSystemValues();
+  result.ra=equatorial.ra,
+  result.dec = equatorial.dec,
+  result.distance=equatorial.distance,
+  result.phase=phaseAngle,
+  result.mag=-10,
+  result.coords=raDecToAltAzandXYZ(lat,lng,equatorial.ra,equatorial.dec,t.time as AstroTime,equatorial.distance*auScaling,false), 
+  result.npcoords=raDecToAltAzandXYZ(90,0,equatorial.ra,equatorial.dec,null,equatorial.distance*auScaling,false),
+  result.nprotateBy=nprotateBy;
+  result.scaledRadius = this.radius * auScaling;
+  result.scaledDistance = result.distance * auScaling;
+  return result;
+}
+moon.axis = {ra: 270,dec:66.54};
+moon.rotateDaily = 13.17635576160556;
+export interface SolarSystemResultItem {
+  body:SolarSystemObject,values:SolarSystemValues
+}
+export interface SolarSystemResult {
+  [propName:string]: SolarSystemResultItem
+}
+export const SolarSystem = [sun,mercury,venus,moon,mars,jupiter,saturn,uranus,neptune ];
+export const calcSolarSystem = function(lat:number,lng:number,timeAt:AstroTime,auScaling:number) {
+  let result:SolarSystemResult = {};
+  let t:TimeAndEarthPosition = EarthPositionAtTime(timeAt);
+  SolarSystem.forEach(     
+    (p)=>{
+      result[p.bf] = ({body:p,values:p.calculate(t,lat,lng,auScaling)})
     }
-    return -4.384 + distance_mag_factor + phaseAngleFactor;
-  } 
-  venus.bf="Venus";
-  venus.proper = "Venus";
-  venus.spect="G2V";
-  venus.ci="";
-  venus.con="Sol";
-  venus.lum= "";
-  venus.k = 5778;
-  venus.color = [255,255,255];
-  venus.axis = {ra: 272.76,dec:67.16};
-  venus.rotateDaily = -1.48;
-  venus.orbitData = venusData;
- 
-  export const mars = new SolarSystemObject();
-
-  mars.orbital_period=686.971;
-  mars.radius=3396200;
-  mars.mass=6.4185E+23;
-  mars.orbitData = marsData;
-  mars.baseMag = -0.367
-  mars.bf="Mars";
-  mars.proper = "Mars";
-  mars.spect="G2V";
-  mars.ci="";
-  mars.con="Sol";
-  mars.lum= "";
-  mars.k = 2500;
-  mars.color = [255,200,200];
-  mars.axis = {ra: 317.67,dec:52.88};
-  mars.rotateDaily = 350.89;
-
-
-
-  export const jupiter = new SolarSystemObject();
-  jupiter.orbital_period=4331.572;
-  jupiter.radius=71492000;
-  jupiter.mass=1.8986E+27;
-  jupiter.baseMag = -9.428;
-  jupiter.bf="Jupiter";
-  jupiter.proper = "Jupiter";
-  jupiter.spect="G2V";
-  jupiter.ci="";
-  jupiter.con="Sol";
-  jupiter.lum= "";
-  jupiter.k = 5778;
-  jupiter.color = [255,255,255];
-  jupiter.axis = {ra: 268.06,dec:64.5};
-  jupiter.rotateDaily = 870.54;
-  jupiter.orbitData = jupiterData;
-  export const saturn = new SolarSystemObject();
-  saturn.orbital_period=10759.22; 
-  saturn.radius=60268000;
-  saturn.mass=5.6846E+26;
-  saturn.baseMag = -8.9;
-  saturn.bf="Saturn";
-  saturn.proper = "Saturn";
-  saturn.spect="G2V";
-  saturn.ci="";
-  saturn.con="Sol";
-  saturn.lum= "";
-  saturn.k = 5600;
-  saturn.color = [255,255,200];
-  saturn.axis = {ra: 40.6,dec:83.54};
-  saturn.rotateDaily = 810.79;
-  saturn.orbitData = saturnData;
-  
-  export const uranus = new SolarSystemObject();
-  uranus.orbital_period=30799.095;  
-  uranus.radius=25559000;
-  uranus.mass=8.6810E+25;
-  uranus.baseMag = -7.1;
-  uranus.bf="Uranus";
-  uranus.proper = "Uranus";
-  uranus.spect="G2V";
-  uranus.ci="";
-  uranus.con="Sol";
-  uranus.lum= "";
-  uranus.k = 5600;
-  uranus.color = [200,255,200];
-  uranus.axis = {ra: 257.31,dec:-15.18};
-  uranus.rotateDaily = -501.16;
-  uranus.orbitData = uranusData;
-  
-  export const neptune = new SolarSystemObject();
-  neptune.orbital_period=60190;  
-  neptune.radius=24764000;
-  neptune.mass=1.0243E+26;
-  neptune.baseMag = -7.0;
-  neptune.bf="Neptune";
-  neptune.proper = "Neptune";
-  neptune.spect="G2V";
-  neptune.ci="";
-  neptune.con="Sol";
-  neptune.lum= "";
-  neptune.k = 10000;
-  neptune.color = [200,255,255];
-  neptune.axis = {ra: 299.4,dec:42.95};
-  neptune.rotateDaily = 536.31;
-  neptune.orbitData = neptuneData;
-
-  export const moon = new SolarSystemObject();
-
-  moon.bf="Luna";
-  moon.proper = "Moon";
-  moon.baseMag=-100;
-  moon.spect="G2V";
-  moon.ci="";
-  moon.con="Sol";
-  moon.lum= "";
-  moon.radius = 1737100;
-  moon.k = 5778;
-  moon.color = [255,255,255];
-  moon.calculate = function(t:TimeAndEarthPosition,lat:number,lng:number,auScaling:number):SolarSystemValues{
-  // This function also calculates how much to rotate the moon's disk by in order to take into account the inclination of its orbit to 
-  // the celestial equator. Note that this has nothing to do with the typically much larger rotation which occurs as a result of the inclination
-  // of the celestial equator to the horizon.
-  //
-  // We move the moon a small distance along its orbit, and calculate the angle of that movement vs the moon's equator.
-  // It's not a perfect calculation, but it's close enough until we find something better
-    let moonPosNow = MoonPosition(t.time);
-    let eclipticPosition = moonPosNow.position.ecliptic;
-    let equatorial = moonPosNow.position.equatorial;
-    let phaseAngle = ((29.53059 + moonPosNow.phase()) / 29.53059) % 1 ;
-    let moonPosSoon = MoonPosition(new AstroTime(new Date(t.time.date.getTime()+3600*1000)));
-    let equatorialSoon = moonPosSoon.position.equatorial;
-    let npcoords = raDecToAltAzandXYZ(90,0,equatorial.ra,equatorial.dec,null,equatorial.distance*auScaling,false);
-    let futnpcoords = raDecToAltAzandXYZ(90,0,equatorialSoon.ra,equatorialSoon.dec,null,equatorialSoon.distance*auScaling,false);
-    let p = npcoords.alt - futnpcoords.alt;
-    let q = (npcoords.az - futnpcoords.az) * Math.cos(npcoords.alt/DegsPerRad);
-    let nprotateBy = Math.atan2(p,q) * DegsPerRad;
-    let result = new SolarSystemValues();
-    result.ra=equatorial.ra,
-    result.dec = equatorial.dec,
-    result.distance=equatorial.distance,
-    result.phase=phaseAngle,
-    result.mag=-10,
-    result.coords=raDecToAltAzandXYZ(lat,lng,equatorial.ra,equatorial.dec,t.time,equatorial.distance*auScaling,false), 
-    result.npcoords=raDecToAltAzandXYZ(90,0,equatorial.ra,equatorial.dec,null,equatorial.distance*auScaling,false),
-    result.nprotateBy=nprotateBy;
-    result.scaledRadius = this.radius * auScaling;
-    result.scaledDistance = result.distance * auScaling;
-    return result;
-  }
-  moon.axis = {ra: 270,dec:66.54};
-  moon.rotateDaily = 13.17635576160556;
-  export interface SolarSystemResultItem {
-    body:SolarSystemObject,values:SolarSystemValues
-  }
-  export interface SolarSystemResult {
-    [propName:string]: SolarSystemResultItem
-  }
-  export const SolarSystem = [sun,mercury,venus,moon,mars,jupiter,saturn,uranus,neptune ];
-  export const calcSolarSystem = function(lat:number,lng:number,timeAt:AstroTime,auScaling:number) {
-    let result:SolarSystemResult = {};
-    let t:TimeAndEarthPosition = EarthPositionAtTime(timeAt);
-    SolarSystem.forEach(     
-      (p)=>{
-        result[p.bf] = ({body:p,values:p.calculate(t,lat,lng,auScaling)})
-      }
-    );
-    return result;
-  }
-  // Return the solar system object nearest the raycaster pointer
+  );
+  return result;
+}
+// Return the solar system object nearest the raycaster pointer
 export const nearestSolarSystem = function(solarResults:any,latitude:number,longitude:number,x:number,y:number,z:number,timeAt:AstroTime, maxMag:number) {
   let radec = XYZToRaDec(latitude,longitude,x,y,z,timeAt);
   let closestIndex = -1;
@@ -1385,6 +1393,6 @@ export const nearestSolarSystem = function(solarResults:any,latitude:number,long
       }
     }
   );
-  let result = { name: wantedSolar.body.bf,ra:wantedSolar.values.ra,dec:wantedSolar.values.dec,distance:closestDistance,mag: wantedSolar.values.mag};
-  return result;
+let result = { name: wantedSolar.body.bf,ra:wantedSolar.values.ra,dec:wantedSolar.values.dec,distance:closestDistance,mag: wantedSolar.values.mag};
+return result;
 }

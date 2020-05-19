@@ -3,6 +3,7 @@
     "compilerOptions": {
         "outDir":"../builtes6/astro",
         "composite": true,
+        "strict": true,
         "rootDir": ".",
     }
 }

@@ -77,7 +77,7 @@ class ProgramTime {
   initialProgramTime:Date;
   currentProgramTime:Date
   currentAstroTime:Astro.AstroTime
-constructor(startDate:Date,daysOffset:number,hoursOffset:number,speedIndex:number) {
+  constructor(startDate:Date,daysOffset:number,hoursOffset:number,speedIndex:number) {
     this.timeIncrements = [
       0,
       1,
@@ -176,6 +176,7 @@ const sceneParameters = {
     brighten: defaultBrighten,
     planetMult: defaultPlanetMult,
     altazLinesVisible: false,
+    radecLinesVisible: false,
     floorVisible: true,
     daylightVisible: true,
     labelsVisible: true,
@@ -188,6 +189,7 @@ const sceneParameters = {
     currentTimeIncrement: 3600*24,
     controllerRotationQuaternion: new BABYLON.Quaternion(),
     eastText: "E",
+    helpVisible: true,
 };
 // Set up our environment and VR stuff
 let canvas:HTMLCanvasElement = document.getElementById("renderCanvas") as HTMLCanvasElement; // Get the canvas element 
@@ -197,7 +199,7 @@ let scene = new BABYLON.Scene(engine);
 scene.clearColor = new BABYLON.Color4(0,0,0,1);
 scene.blockMaterialDirtyMechanism = true;
 
-let VRHelper = scene.createDefaultVRExperience({defaultLightingOnControllers:false,rayLength:1E6,laserToggle:false,useMultiview: false});
+let VRHelper = scene.createDefaultVRExperience({useXR:true,defaultLightingOnControllers:false,rayLength:1E6,laserToggle:false,useMultiview: false});
 VRHelper.enableInteractions();
 VRHelper.setLaserColor(new BABYLON.Color3(0.5,0.9,0.1),new BABYLON.Color3(0.5,0.5,0.1));
 VRHelper.setGazeColor(new BABYLON.Color3(0.1,0.1,0.9),new BABYLON.Color3(0.5,0.5,0.1));
@@ -236,7 +238,7 @@ const updateProgramTime = function(always?:boolean) {
   let startProgramTime = programTime.getCurrentProgramTime();
   programTime.setProgramTime();
   let newProgramTime = programTime.getCurrentProgramTime();
-  if (always || (newProgramTime !== startProgramTime)) {
+  if (always || (newProgramTime !== startProgramTime) || bScene.hasChanged("latitude") || bScene.hasChanged("longitude")) {
     solarSystemResult = Astro.calcSolarSystem(bScene.valueOf("latitude"),bScene.valueOf("longitude"),programTime.getCurrentProgramTimeAsAstroTime(),bScene.valueOf("auScaling"));
     bScene.changeState({programTime:newProgramTime});
   }
@@ -255,6 +257,34 @@ bSky.setUpdate((me,bScene)=>{
   me.mesh.rotationQuaternion = latitudeQ.multiply(longitudeQ);
 });
 
+let bRadecLines = new BabyLife.BabyEntity(bScene,bSky);
+bRadecLines.dependsOn(["radecLinesVisible","programTime"]);
+bRadecLines.setInit((me,bScene)=>{
+  me.mesh = new BABYLON.TransformNode("radecLines");
+  me.mesh.setParent(bSky.mesh);
+  me.mesh.setEnabled(false);
+  Arcs.raGrid(starDistance * 0.7,"RA",new BABYLON.Color3(0.1,0.1,0.05),me.mesh,bScene.scene);
+  Arcs.decGrid(starDistance * 0.7,"DEC",new BABYLON.Color3(0.1,0.1,0.05),me.mesh,bScene.scene);
+});
+bRadecLines.setUpdate((me,bScene)=>{
+  if (me.mesh) {
+    me.mesh.setEnabled(bScene.valueOf("radecLinesVisible"));
+  
+  }
+});
+let bAltazLines = new BabyLife.BabyEntity(bScene);
+bAltazLines.dependsOn(["altazLinesVisible","programTime"]);
+bAltazLines.setInit((me,bScene)=>{
+  me.mesh = new BABYLON.TransformNode("altazLines");
+  me.mesh.setEnabled(false);
+  Arcs.raGrid(starDistance * 0.7,"AZ",new BABYLON.Color3(0.05,0.1,0.05),me.mesh,bScene.scene);
+  Arcs.decGrid(starDistance * 0.7,"ALT",new BABYLON.Color3(0.05,0.1,0.05),me.mesh,bScene.scene);
+});
+bAltazLines.setUpdate((me,bScene)=>{
+  if (me.mesh) {
+    me.mesh.setEnabled(bScene.valueOf("altazLinesVisible"));
+  }
+});
 // This component creates the boundaries and names of the contstellations
 // It is only initialised once needed to reduce startup times
 let bConstellBoundaries = new BabyLife.BabyEntity(bScene,bSky);
@@ -262,10 +292,10 @@ bConstellBoundaries.dependsOn(["showConstellBoundaries"]);
 bConstellBoundaries.setInit((me,bScene)=>{
     me.mesh = new BABYLON.TransformNode("constellBoundaries");
     me.mesh.setParent(bSky.mesh);
-    me.mesh.isVisible = false;
+    me.mesh.setEnabled(false);
     Object.keys(Constellations.constellations).forEach(k=>{
       let c = Constellations.constellations[k];
-      Arcs.polygonVia(c.boundaryPoints,starDistance / 2,k + "Boundary",new BABYLON.Color3(0.05,0.1,0.05),me.mesh,bScene.scene);
+      Arcs.arcThrough(c.boundaryPoints,starDistance / 2,k + "Boundary",new BABYLON.Color3(0.05,0.1,0.05),me.mesh,bScene.scene);
     });
 });
 bConstellBoundaries.setUpdate(async (me,bScene)=>{
@@ -277,6 +307,7 @@ bConstellNames.dependsOn(["showConstellBoundaries","showConstellLines"]);
 bConstellNames.setInit((me,bScene)=>{
     me.mesh = new BABYLON.TransformNode("constellNames");
     me.mesh.setParent(bSky.mesh);
+    me.mesh.setEnabled(false);
     Object.keys(Constellations.constellations).forEach(k=>{
       let c = Constellations.constellations[k];
       let t = Arcs.createTextAtRaDec(c.coords[0],c.coords[1],1000,k,"#601010",bScene.scene) ;
@@ -295,12 +326,10 @@ bConstellLines.dependsOn(["showConstellLines"]);
 bConstellLines.setInit((me,bScene)=>{
   me.mesh = new BABYLON.TransformNode("constellLines");
   me.mesh.setParent(bSky.mesh);
-  me.mesh.isVisible=false;
+  me.mesh.setEnabled(false);
   Object.keys(Constellations.constellations).forEach(k=>{
     let c = Constellations.constellations[k];
-    c.lines.forEach( (l:number[][]) => {
-      Arcs.pathBetween(l,starDistance * 0.7,k+"Line",new BABYLON.Color3(0.1,0.05,0.05),me.mesh,bScene.scene);
-    });
+    Arcs.arcSystemThrough(c.lines,starDistance * 0.7,k+"Lines",new BABYLON.Color3(0.1,0.05,0.05),me.mesh,bScene.scene);
   });
 
 });
@@ -454,7 +483,7 @@ let createPlanet = function(name:string,fudgeFactor:number,multOnAt:number,multM
     }
     if ( name === "Saturn") {
       me.data.rings = SaturnRings.createRings(bScene.scene,fudgeFactor*planet.body.radius*5,useLogarithmic);
-me.data.light.includedOnlyMeshes.push(me.data.rings); me.data.rings.setParent(me.mesh);
+      me.data.light.includedOnlyMeshes.push(me.data.rings); me.data.rings.setParent(me.mesh);
       me.data.rings.position.x = 0;
       me.data.rings.position.y = 0;
       me.data.rings.position.z = 0;
@@ -495,14 +524,14 @@ me.data.light.includedOnlyMeshes.push(me.data.rings); me.data.rings.setParent(me
 });
 };
 // Now we actuall create the planet components
-createPlanet("Mercury",1,100,1000,0,1);
-createPlanet("Venus",1,100,1000,0,1);
-createPlanet("Mars",1,100,1000,0,1);
-createPlanet("Jupiter",1,100,1000,0,1);
-createPlanet("Saturn",1,100,1000,0,1);
-createPlanet("Uranus",1,100,1000,0,1);
-createPlanet("Neptune",1,100,1000,0,1);
-createPlanet("Luna",moonFudge,0.1,50,10,6);
+createPlanet("Mercury",1,5,1000,0,1);
+createPlanet("Venus",1,5,1000,0,1);
+createPlanet("Mars",1,5,1000,0,1);
+createPlanet("Jupiter",1,5,1000,0,1);
+createPlanet("Saturn",1,5,1000,0,1);
+createPlanet("Uranus",1,5,1000,0,1);
+createPlanet("Neptune",1,5,1000,0,1);
+createPlanet("Luna",moonFudge,0.1,10,10,6);
 
 // This is the rendering of planets as point objects
 let bPlanets = new BabyLife.BabyEntity(bScene,bSky);
@@ -519,44 +548,206 @@ bPlanets.setUpdate((me,bScene)=>{
   me.mesh.setEnabled(planetScaling < 100);
 });
 
-
 let bKeyboard = new BabyLife.BabyEntity(bScene);
 bKeyboard.dependsOn(["labelsVisible"]);
 bKeyboard.setInit((me,bScene) => {
-  me.data.plane = BABYLON.MeshBuilder.CreatePlane("keyboardplane",{width:50,height:40});//{width:40,height:10});
-  me.data.plane.isPickable = true;
-  me.data.adt = BABYLON.GUI.AdvancedDynamicTexture.CreateForMesh(me.data.plane);
-  me.data.plane.position.y = 10;
-  me.data.plane.position.z = 50;
-  me.data.keyboard = new BABYLON.GUI.VirtualKeyboard();
-  let opts = {width:"200px",height:"80px"};
-  me.data.keyboard.addKeysRow([
-    "Constellation Lines","Constellation Bounds","Start/Stop Clock"
-  ],[
-    opts,opts,opts
-  ]);
-  me.data.keyboard.onKeyPressObservable.add((key:any)=>{
-     interactionHandler.keyBindings(key);
+  let plane  = BABYLON.MeshBuilder.CreatePlane("keyboardplane",{width:1,height:1});
+  let scaling = 40; // factor to make everything a reasonable size
+  plane.scaling = new BABYLON.Vector3(scaling,scaling,scaling);
+  let adt = BABYLON.GUI.AdvancedDynamicTexture.CreateForMesh(plane);
+  plane.position.x = 0;
+  plane.position.y = 1.6 + (( 105/500 -0.5)* scaling)
+  plane.position.z = 50;
+  var grid = new BABYLON.GUI.Grid();   
+  grid.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+  grid.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
+  grid.addColumnDefinition(0.2);
+  grid.addColumnDefinition(0.2);
+  grid.addColumnDefinition(0.2);
+  grid.addColumnDefinition(0.2);
+  grid.addColumnDefinition(0.2);
+  grid.addRowDefinition(50,true);
+
+  let button = BABYLON.GUI.Button.CreateSimpleButton("help1","Help");
+  //button1.width = 0.5;
+  //button1.height= 0.2;
+  button.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+  button.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+  button.color = "yellow";
+  button.background = "black";
+  button.fontSize = 30;
+  button.isPointerBlocker = true;
+  button.onPointerClickObservable.add(()=>{
+    interactionHandler.keyBindings("h");
   });
-  me.data.adt.addControl(me.data.keyboard);
+  grid.addControl(button,0,0);
+  
+  button = BABYLON.GUI.Button.CreateSimpleButton("help2","Constel Lines");
+  button.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+  button.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+  button.color = "white";
+  button.background = "black";
+  button.fontSize = 25;
+  button.isPointerBlocker = true;
+  button.onPointerClickObservable.add(()=>{
+    toggleConstellLinesAction();
+  });
+  grid.addControl(button,0,1);
+
+  button = BABYLON.GUI.Button.CreateSimpleButton("help2","Constel Bounds");
+  button.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+  button.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+  button.color = "white";
+  button.background = "black";
+  button.fontSize = 25;
+  button.isPointerBlocker = true;
+  button.onPointerClickObservable.add(()=>{
+    toggleConstellBoundariesAction();
+  });
+  grid.addControl(button,0,2);
+  
+  button = BABYLON.GUI.Button.CreateSimpleButton("help2","Alt/Az lines");
+  button.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+  button.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+  button.color = "white";
+  button.background = "black";
+  button.fontSize = 25;
+  button.isPointerBlocker = true;
+  button.onPointerClickObservable.add(()=>{
+    toggleAltazLinesAction();
+  });
+  grid.addControl(button,0,3);
+
+  button = BABYLON.GUI.Button.CreateSimpleButton("help2","Ra/Dec Lines");
+  button.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+  button.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+  button.color = "white";
+  button.background = "black";
+  button.fontSize = 25;
+  button.isPointerBlocker = true;
+  button.onPointerClickObservable.add(()=>{
+    toggleRadecLinesAction();
+  });
+  grid.addControl(button,0,4);
+
+  adt.addControl(grid);
+
+  var grid2 = new BABYLON.GUI.Grid();
+  grid2.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+  grid.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
+  grid2.top = 55;
+  grid2.addRowDefinition(50,true);
+  grid2.addColumnDefinition(0.1);
+  grid2.addColumnDefinition(0.1);
+  grid2.addColumnDefinition(0.1);
+  grid2.addColumnDefinition(0.1);
+  grid2.addColumnDefinition(0.1);
+  grid2.addColumnDefinition(0.1);
+  grid2.addColumnDefinition(0.1);
+  grid2.addColumnDefinition(0.1);
+  grid2.addColumnDefinition(0.1);
+  grid2.addColumnDefinition(0.05);
+  grid2.addColumnDefinition(0.05);
+
+
+  for (let i=1;i<=9;i++)
+  {
+    let speedButton = BABYLON.GUI.Button.CreateSimpleButton("s" + i.toString(),programTime.timeIncrementTexts[i]);
+    speedButton.fontSize = 30;
+    speedButton.isPointerBlocker = true;
+    speedButton.color = "white";
+    speedButton.onPointerClickObservable.add(()=>{
+      interactionHandler.keyBindings(i.toString());
+    });
+    grid2.addControl(speedButton,0,i-1);
+  }
+  button = BABYLON.GUI.Button.CreateSimpleButton("tplus","T+");
+  button.fontSize = 30;
+  button.isPointerBlocker = true;
+  button.color = "white";
+  button.onPointerClickObservable.add(()=>{
+    interactionHandler.keyBindings('u');
+  });
+  grid2.addControl(button,0,9);
+
+  button = BABYLON.GUI.Button.CreateSimpleButton("tminus","T-");
+  button.fontSize = 30;
+  button.isPointerBlocker = true;
+  button.color = "white";
+  button.onPointerClickObservable.add(()=>{
+    interactionHandler.keyBindings('U');
+  });
+  grid2.addControl(button,0,10);
+  adt.addControl(grid2);
   let showLabels = bScene.valueOf("labelsVisible");
-  me.data.plane.setEnabled(showLabels);
-  //me.keyboard.connect(me.input2);
-  //me.button = BABYLON.GUI.Button.CreateSimpleButton("but","BUTTON");
-  //me.button.width=0.2;
-  //me.button.height="40px";
-  //me.button.color="white";
-  //me.button.onPointerClickObservable.add(()=>{
-    //alert("PC");
-  //});
-  // me.data.adt.addControl(me.button);
+  plane.setEnabled(showLabels);
+  me.data.plane = plane;
 });
 bKeyboard.setUpdate((me,bScene)=>{
   let showLabels = bScene.valueOf("labelsVisible");
   me.data.plane.setEnabled(showLabels);
 });
+// create a text box which, if placed at 'distance' will show the text at a standard size scaled by the appropriate factor
+const textBox = function(text:string,nRows:number,nCols:number,scaleBy:number,distance:number) {
+  const ratio = 40/19; // for our standard font this just happens to be about right
+  const fontFactor = 1800; 
+  let plane = BABYLON.MeshBuilder.CreatePlane("textplane",{width:1,height:1},bScene.scene);
+  const widthNeeded = nCols;
+  const heightNeeded = nRows* ratio;
+  const sizeNeeded = Math.max(widthNeeded,heightNeeded);
+  const fontSize = fontFactor / sizeNeeded;
+  const scaling = distance * scaleBy * 25 / fontSize;
+  plane.scaling = new BABYLON.Vector3(scaling,scaling,scaling);
+  let adt = BABYLON.GUI.AdvancedDynamicTexture.CreateForMesh(plane);
+  adt.background = "black";
+  let button = BABYLON.GUI.Button.CreateSimpleButton("textx",text);
+  button.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+  button.width = widthNeeded/sizeNeeded;
+  button.height= heightNeeded/sizeNeeded;
+  button.fontSize=fontSize;
+  button.color = "white";
+  button.isPointerBlocker = true;
+  adt.addControl(button);
+  return({plane:plane,adt:adt,button:button,scaling:scaling,buttonHeight:heightNeeded/sizeNeeded});
+}
 
-// We no longer show labels in the sky, but this is useful for future reference
+const bHelp = new BabyLife.BabyEntity(bScene);
+bHelp.dependsOn(["helpVisible"]);
+bHelp.setInit((me,bScene) =>{
+
+  const helpText=`Help - click to dismiss this message
+  You can control the planetarium with the buttons or by using the two hand controllers. 
+  Key bindings, along with other useful information, are shown by the controller images. 
+  If you click in the sky, the right controller will show you detailed information about the nearest object to where you clicked.
+
+  Note that we don't have info or displays of deep sky objects. 
+  For the moment this is a tool for learning the constellations and the movement of the planets.
+  `;
+  const distance = 30;
+  const c = textBox(helpText,13,50,1,distance);
+
+  let plane = c.plane;
+  let adt = c.adt;
+  let button = c.button;
+  // plane.isPickable = true;
+ 
+  plane.position.y = 1.6 + ((-0.5 + c.buttonHeight)* c.scaling) ;
+  plane.position.z = distance;
+  button.onPointerClickObservable.add(()=>{
+     bScene.changeState({"helpVisible":false});
+  });
+  adt.addControl(button);
+  me.data.plane = plane;
+  return;
+});
+
+bHelp.setUpdate((me,bScene)=>{
+  const showHelp = bScene.valueOf("helpVisible");
+  me.data.plane.setEnabled(showHelp);
+  me.data.plane.isVisible = showHelp;
+});
+
+/* We no longer show labels in the sky, but this is useful for future reference
 let bLabels = new BabyLife.BabyEntity(bScene);
 bLabels.dependsOn(["labelsVisible","programTime","eastText"]);
 bLabels.setInit((me,bScene) =>{
@@ -612,7 +803,7 @@ bLabels.setUpdate((me,bScene)=>{
   me.data.northText.text = programTime.getCurrentProgramTimeAsDate().toLocaleDateString("EN-GB",options);
   me.data.eastText.text= bScene.valueOf("eastText");
 });
-
+*/
 
 // Our floor uses an example texture from the babylon website. This should be changed to one of our own in due course
 let bFloor = new BabyLife.BabyEntity(bScene);
@@ -677,7 +868,8 @@ const toggleActionFor = (name:string)=> {
 const toggleLabelsAction = toggleActionFor("labelsVisible");
 const toggleConstellLinesAction = toggleActionFor("showConstellLines");
 const toggleConstellBoundariesAction = toggleActionFor("showConstellBoundaries");
-
+const toggleAltazLinesAction = toggleActionFor("altazLinesVisible");
+const toggleRadecLinesAction = toggleActionFor("radecLinesVisible");
 const changeFloorAndDaylightVisibilityAction = 
       ()=> {
           let fv = bScene.valueOf("floorVisible");
@@ -1027,7 +1219,7 @@ class InteractionHandler {
        bScene.changeState({maxMag:bScene.valueOf("maxMag")+0.5});
        break;
     case 'M':
-    case "Start/Stop Clock":
+    case "Start/Stop\nClock":
        let currentSpeedIndex = programTime.currentSpeedIndex;
        if (currentSpeedIndex == 0) {
          programTime.setSpeedFromIncrement();
@@ -1062,12 +1254,19 @@ class InteractionHandler {
           "AuScale: " + auScaling.toString()
                } );
       break
+    case 'Help':
+    case 'h':
+      bScene.changeState({helpVisible: !bScene.valueOf("helpVisible")})  
+      break;
+    case 'Dismiss Help':
+    case 'Help -  Click here to dismiss':
+      bScene.changeState({helpVisible:false});
     case 'c':
-    case "Constellation Lines":
+    case "Constellation\nLines":
        toggleConstellLinesAction();
        break;
     case 'v':
-    case "Constellation Bounds":
+    case "Constellation\nBounds":
        toggleConstellBoundariesAction();
        break;
     case 'T':

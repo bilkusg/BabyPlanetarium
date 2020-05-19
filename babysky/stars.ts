@@ -1,3 +1,6 @@
+/**
+ * This file is part of babysky and contains the custom shader for rendering stars, together with utility functions
+ */
 import * as Astro from "../astro/astro.js";
 BABYLON.Effect.ShadersStore["starVertexShader"] = `
 precision highp float;

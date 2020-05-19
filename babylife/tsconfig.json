@@ -3,6 +3,7 @@
     "compilerOptions": {
         "outDir":"../builtes6/babylife",
         "composite": true,
+        "strict": true,
         "rootDir": ".",
     }
 }

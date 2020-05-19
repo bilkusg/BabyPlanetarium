@@ -29,7 +29,7 @@ correct size, and making it bigger lets you see it as though through a telescope
 The control panel is customised with labels which tell you what each key does. You press a key by raycasting and hitting the trigger.
 
 ## raycasting
-If you point at a star and hit the trigger on the right hand controller, the display in the west
+If you point at a star and hit the trigger on the right hand controller, the display
 will show the name, constellation, magnitude, ra and dec of the star. 
 As mentioned above, the raycaster also allows use of the control panel in the North.
 
@@ -40,8 +40,10 @@ This is the second publicly released version v5.0 dated October 2019
 Distributed under the MIT license. 
 
 ## Understanding the code
-One of the main purposes of writing this application was to become familiar with a-frame at a more than superficial level. As a result, I have documented the code rather more
-assiduously than I might have otherwise done, in the hope that this makes it easy for others ( or myself in future ) to learn from it. 
+One of the main purposes of writing this application was to become familiar with babylon at a more than superficial level. As a result, I have documented the code rather more
+assiduously than I might have otherwise done, in the hope that this makes it easy for others ( or myself in future ) to learn from it.
+
+The code is written in typescript so if you change anything you need to run tsc to update the distributed version.
 
 If you want to dive in, you should know the following
 - index.html just creates a form to set up various useful initial parameters before launching the main application
@@ -49,10 +51,8 @@ If you want to dive in, you should know the following
 - babylife.js defines a lifecycle for parts of the view. It makes it easy
   to add components to an existing application 
 - babysky.js is the main javascript file which sets up the defaults, creates components, loads the scene and runs things.
-- scene.html is the definition of the a-frame scene. It is dynamically loaded by sky.js to ensure it doesn't inititalise the dom before all our components are registered.
 - astro.js is a set of useful astronomical functions
 - vendor is a directory containing various third-party libraries for which there was no convenient online repo
-- vendor/aframe-control-panel is one of mine
 
 ## Acknowledgements
 This open-source project is dependent on a number of other open-source projects and resources. In particular:
