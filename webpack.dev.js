@@ -12,6 +12,7 @@ module.exports = merge(common, {
     devServer: {
         static: path.resolve(appDirectory, "public"),
         compress: false,
+        writeToDisk: true,
         hot: true,
         // publicPath: '/',
         open: true,
