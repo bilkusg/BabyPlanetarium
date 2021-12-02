@@ -14,7 +14,7 @@ import {WebXRMotionControllerManager,Quaternion,Engine,Scene,Color3,Color4,Vecto
     Axis,
     MeshBuilder,
     StandardMaterial,PointLight,Light,Mesh,SceneLoader,
-    Texture,DirectionalLight,Ray,ActionManager,ExecuteCodeAction
+    Texture,DirectionalLight,Ray,ActionManager,ExecuteCodeAction, CreateGroundVertexData, GroundBuilder
 }  from "@babylonjs/core";
 import {AdvancedDynamicTexture,Grid,Control,Button,TextBlock}   from "@babylonjs/gui";
 import { SkyMaterial } from "@babylonjs/materials";
@@ -105,10 +105,10 @@ export async function runBabySky() {
                 60,
                 600,
                 3600,
-                3600 * 24 * 365.25 / 366.25,
+                86164.1,
                 3600 * 24,
                 3600 * 24 * 30,
-                3600 * 24 * 30 * 365.25 / 366.25,
+                31558149.504,
                 3600 * 24 * 365];
             this.currentSpeedIndex = speedIndex;
             this.programStartTime = new Date();
@@ -842,10 +842,17 @@ export async function runBabySky() {
         let bFloor = new BabyLife.BabyEntity(bScene);
         bFloor.dependsOn(["floorVisible"]);
         bFloor.setInit((me, bScene) => {
-            /* Unfortunately the dynamic texture doesn't play well with ES6 and I haven't yet fixed that
-          let terrainTexture = new Texture("https://www.babylonjs-playground.com/textures/earth.jpg",bScene.scene);
+          let terrainTexture = new Texture("textures/grass.jpg",bScene.scene);
           let terrainMaterial = new StandardMaterial("floor",bScene.scene);
           terrainMaterial.diffuseTexture = terrainTexture;
+          let ground = MeshBuilder.CreateGround("ground",{width:2000,height:2000},bScene.scene);
+          terrainTexture.uScale = 2000;
+          terrainTexture.vScale = 2000;
+          ground.material = terrainMaterial;
+          
+          me.data.terrain = {mesh:ground};
+          /* Unfortunately the dynamic terrain doesn't play well with ES6 and I haven't yet fixed that
+             so for now the ground is just a boring repeating grass like pattern
           var createTerrain = function(mapData:any,mapSubX:any,mapSubZ:any) {
             me.data.terrain = new DynamicTerrain('t', {
               mapData:mapData,
@@ -853,6 +860,7 @@ export async function runBabySky() {
               mapSubZ:mapSubZ,
               terrainSub:120
             },bScene.scene);
+            
             me.data.terrain.createUVMap();
             me.data.terrain.mesh.material = terrainMaterial;
             me.data.terrain.update(true);
@@ -1269,6 +1277,7 @@ export async function runBabySky() {
                         break;
                     case 'f':
                         bScene.changeState({ floorVisible: !bScene.valueOf("floorVisible") });
+                        console.log("Changed floor");
                         break;
                     case 'd':
                         bScene.changeState({ daylightVisible: !bScene.valueOf("daylightVisible") });
@@ -1302,7 +1311,7 @@ export async function runBabySky() {
                         }
                         break;
                     case 's':
-                        let auScaling = bScene.valueOf("auScaling") / Math.sqrt(1000);
+                        var auScaling = bScene.valueOf("auScaling") / Math.sqrt(1000);
                         bScene.changeState({ auScaling: auScaling });
                         bScene.changeState({
                             "eastText":
@@ -1310,7 +1319,7 @@ export async function runBabySky() {
                         });
                         break
                     case 'a':
-                        auScaling = bScene.valueOf("auScaling") * Math.sqrt(1000);
+                        var auScaling = bScene.valueOf("auScaling") * Math.sqrt(1000);
                         bScene.changeState({ auScaling: auScaling });
                         bScene.changeState({
                             "eastText":
@@ -1347,10 +1356,10 @@ export async function runBabySky() {
                         bScene.changeState({ currentTimeIncrement: programTime.timeIncrement() });
                         break;
                     case 'u':
-                        programTime.applyTimeIncrementForward();
+                        timeForwardAction();
                         break;
                     case 'U':
-                        programTime.applyTimeIncrementBackward();
+                        timeBackAction();
                         break;
                 };
                 updateProgramTime(true);
