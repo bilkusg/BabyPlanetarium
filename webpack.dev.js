@@ -10,11 +10,12 @@ module.exports = merge(common, {
     mode: 'development',
     devtool: 'inline-source-map',
     devServer: {
+        devMiddleware: {
+            writeToDisk: true,
+        },
         static: path.resolve(appDirectory, "public"),
         compress: false,
-        writeToDisk: true,
         hot: true,
-        // publicPath: '/',
         open: true,
         port: 2480,
         allowedHosts: 'all',

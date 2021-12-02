@@ -54,7 +54,7 @@ module.exports = {
         new CleanWebpackPlugin(),
         new CopyPlugin({
             patterns:[
-                { from: "src/public", to: "public"},
+                { from: "src/public", to: "."},
             ],
         }),
     ],
