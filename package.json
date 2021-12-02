@@ -1,6 +1,6 @@
 {
     "name": "greenwheel-vr-planetarium",
-    "version": "1.2.0",
+    "version": "2.1.0",
     "description": "Planetarium program for Oculus etc.",
     "main": "index.ts",
     "dependencies": {
