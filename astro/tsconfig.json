@@ -1,9 +1,0 @@
-{
-    "extends": "../tsconfig-base.json",
-    "compilerOptions": {
-        "outDir":"../builtes6/astro",
-        "composite": true,
-        "strict": true,
-        "rootDir": ".",
-    }
-}

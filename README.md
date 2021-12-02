@@ -1,14 +1,14 @@
-# babyplanetarium by greenwheel
+# Planetarium by greenwheel
 > A Babylon.js application designed for the Oculus Quest but easily modifiable for other platforms, 
 which attempts to display the sky with reasonable accuracy.  
 
 ## Usage
-Just configure your web server to serve from the top directory  and then point your browser accordingly
+Configure your web server to serve from the public directory  and then point your browser accordingly
 
 When you start the program it allows you to configure various parameters which control the resulting view of the sky. Then when you enter, the VR app is displayed. Clicking on the logo at the bottom right will put you into full VR mode if your hardware supports this.
 
 ### Oculus Quest controls
-When you launch the main app, you will see a view of the sky with a rather boring black ground. There is a control panel to the north which can be controlled by pointing the laser beam on the right hand controller and pressing the trigger. You can also control things using the xy and ab buttons, and the thumb controllers on each hand. 
+When you launch the main app, you will see a view of the sky with a rather boring black ground. There is a control panel to the north which can be controlled by pointing the laser beam on the right hand controller and pressing the trigger. You can also control things using the xy and ab buttons, and the thumb controllers on each hand, and there is a text display attached to each controller with a guide to what does what, as well as some useful information.
 
 The buttons work as follows:
 
@@ -34,12 +34,15 @@ will show the name, constellation, magnitude, ra and dec of the star.
 As mentioned above, the raycaster also allows use of the control panel in the North.
 
 ## Release History
-This is the second publicly released version v5.0 dated October 2019
+This is the second publicly released version v2.1 dated December 2021
   
 ## License
 Distributed under the MIT license. 
 
 ## Understanding the code
+
+Check the package.json file for the various commands you may need in either testing or creating a production version. An understanding of the node/npm/webpack ecosystem will help.
+
 One of the main purposes of writing this application was to become familiar with babylon at a more than superficial level. As a result, I have documented the code rather more
 assiduously than I might have otherwise done, in the hope that this makes it easy for others ( or myself in future ) to learn from it.
 

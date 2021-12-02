@@ -1,18 +1,54 @@
 {
-  "name": "babyplanetarium",
-  "version": "1.0.0",
-  "description": "Planetarium Program using Babylon.js",
-  "main": "bundle.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "ssh://gary@par1.greenwheel.com/home/gary//greenwheel/babyplanetarium"
-  },
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "systemjs": "^6.1.9"
-  }
+    "name": "greenwheel-vr-planetarium",
+    "version": "1.2.0",
+    "description": "Planetarium program for Oculus etc.",
+    "main": "index.ts",
+    "dependencies": {
+        "@babylonjs/core": "^5.0.0-alpha.62",
+        "@babylonjs/loaders": "^5.0.0-alpha.62",
+        "@babylonjs/gui": "^5.0.0-alpha.62",
+        "@babylonjs/materials":"^5.0.0-alpha.62",
+        "@babylonjs/inspector":"^5.0.0-alpha.62",
+        "npm": "^8.1.4"
+    },
+    "devDependencies": {
+        "@typescript-eslint/eslint-plugin": "^5.4.0",
+        "@typescript-eslint/parser": "^5.4.0",
+        "clean-webpack-plugin": "^3.0.0",
+        "eslint": "^8.3.0",
+        "file-loader": "^6.2.0",
+        "html-webpack-plugin": "^5.5.0",
+        "source-map-loader": "^3.0.0",
+        "ts-loader": "^8.3.0",
+        "typescript": "^4.5.2",
+        "url-loader": "^4.1.1",
+        "webpack": "^5.64.2",
+        "webpack-cli": "^4.9.1",
+        "webpack-dev-server": "^4.5.0",
+        "webpack-merge": "^5.8.0"
+    },
+    "scripts": {
+        "start": "npx webpack serve  --config webpack.dev.js",
+        "build:dev": "npx webpack   --config webpack.dev.js", 
+        "build": "npx webpack --config webpack.prod.js", 
+        "lint": "npx eslint . --ext .ts,.tsx"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/bilkusg/BabyPlanetarium.git"
+    },    
+    "keywords": [
+        "Babylon.js",
+        "webxr",
+        "astronomy",
+        "planetarium",
+        "typescript",
+        "es6"
+    ],
+    "author": {
+        "name": "Gary Bilkus",
+        "email": "github@gary.bilkus.com",
+        "url": "https://www.gary.bilkus.com/"
+    },
+    "license": "Apache-2.0"
 }

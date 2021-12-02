@@ -1,8 +1,17 @@
 {
-    "files": [],
-    "references": [
-        {"path": "./astro",},
-        { "path":"./babylife",},
-        {"path":"./babysky",},
-    ]
+	"compilerOptions": {
+        "module": "esNext",
+		"target": "es5",
+		"moduleResolution": "node",
+		"strict": true,
+		"noImplicitAny": true,
+        "noImplicitReturns": true,
+        "noImplicitThis": true,
+        "strictNullChecks": true,
+        "strictFunctionTypes": true,
+        "skipLibCheck": true,
+		"preserveConstEnums":true,
+        "sourceMap": true,
+        "rootDir": "src"
+	}
 }
