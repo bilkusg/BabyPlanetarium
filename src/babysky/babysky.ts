@@ -14,7 +14,7 @@ import {WebXRMotionControllerManager,Quaternion,Engine,Scene,Color3,Color4,Vecto
     Axis,
     MeshBuilder,
     StandardMaterial,PointLight,Light,Mesh,SceneLoader,
-    Texture,DirectionalLight,Ray,ActionManager,ExecuteCodeAction, CreateGroundVertexData, GroundBuilder
+    Texture,DirectionalLight,Ray,ActionManager,ExecuteCodeAction, CreateGroundVertexData, GroundBuilder, WebXRExperienceHelper
 }  from "@babylonjs/core";
 import {AdvancedDynamicTexture,Grid,Control,Button,TextBlock}   from "@babylonjs/gui";
 import { SkyMaterial } from "@babylonjs/materials";
@@ -23,14 +23,14 @@ import "@babylonjs/core/Debug/debugLayer";
 import "@babylonjs/inspector";
 
 // This program is for oculus touch
-import { WebXROculusTouchMotionController } from "@babylonjs/core/XR/motionController/webXROculusTouchMotionController";
+//import { WebXROculusTouchMotionController } from "@babylonjs/core/XR/motionController/webXROculusTouchMotionController";
 // prioritize the local classes (but use online if controller not found)
-WebXRMotionControllerManager.PrioritizeOnlineRepository = false;
+//WebXRMotionControllerManager.PrioritizeOnlineRepository = false;
 
-let solarSystemResult: Astro.SolarSystemResult | null = null; // stores the result of calculating the solar system parameters
 
 export async function runBabySky() {
     const DegsPerRad = Astro.DegsPerRad;
+    let solarSystemResult: Astro.SolarSystemResult | null = null; // stores the result of calculating the solar system parameters
 
     // Grab initial parameters from the url and define a few more
     let theUrl = new URL(window.location.href);
@@ -219,35 +219,14 @@ export async function runBabySky() {
 
     scene.clearColor = new Color4(0, 0, 0, 1);
     scene.blockMaterialDirtyMechanism = true;
-
+    let camera = new UniversalCamera("UniversalCamera", new Vector3(0, 0, 0), scene);
+    scene.activeCamera = camera;
 
     scene.registerBeforeRender(function onceOnly() {
         // With VR we used this for laser pointer stuff
         scene.unregisterBeforeRender(onceOnly);
     });
 
-    let xrHelper: WebXRDefaultExperience | null = null;
-    if (true) {
-        xrHelper = await scene.createDefaultXRExperienceAsync({});
-        scene.activeCamera!.maxZ = starDistance * 3;
-        xrHelper.pointerSelection.dispose();
-        xrHelper.pointerSelection = <WebXRControllerPointerSelection>xrHelper.baseExperience.
-            featuresManager.enableFeature(WebXRFeatureName.POINTER_SELECTION, "latest", {
-                xrInput: xrHelper.input,
-                disableSwitchOnClick: false,
-                maxPointerDistance: Infinity,
-
-            });
-        xrHelper.pointerSelection.laserPointerDefaultColor = new Color3(0.5, 0.2, 0.1);
-        xrHelper.pointerSelection.displayLaserPointer = true;
-        xrHelper.pointerSelection.displaySelectionMesh = true;
-
-    } else {
-        // not using vr for testing doesn't work at this point
-        let camera = new UniversalCamera("UniversalCamera", new Vector3(0, 0, 0), scene);
-        scene.activeCamera = camera;
-    }
- 
 
     // The scene creation function
     const buildSkyScene = async function (engine: Engine, scene: Scene) {
@@ -1068,7 +1047,7 @@ export async function runBabySky() {
                         "Side " + this.rightSecondaryTriggerHelpText;
                 }
             }
-            enableControllers() {
+            enableControllers(xrHelper: WebXRDefaultExperience) {
                 if (xrHelper == null) { return; }
                 const webXRInput = xrHelper.input;
                 xrHelper.teleportation.detach();
@@ -1110,45 +1089,54 @@ export async function runBabySky() {
 
                             const xr_ids = motionController.getComponentIds();
                             let triggerComponent = motionController.getComponent(xr_ids[0]);//xr-standard-trigger
-                            triggerComponent.onButtonStateChangedObservable.add(() => {
-                                if (triggerComponent.pressed) {
+                            if (triggerComponent) {
+                                triggerComponent.onButtonStateChangedObservable.add(() => {
+                                    if (triggerComponent.pressed) {
 
-                                    console.log("Left trigger pressed");
-                                } else {
-                                    console.log("Left trigger released");
-                                }
-                            });
+                                        console.log("Left trigger pressed");
+                                    } else {
+                                        console.log("Left trigger released");
+                                    }
+                                });
+                            }
                             let squeezeComponent = motionController.getComponent(xr_ids[1]);//xr-standard-squeeze
-                            squeezeComponent.onButtonStateChangedObservable.add((stateObject: any) => {
-                                if (!stateObject.pressed) return;
-                                if (stateObject.value < 0.99) return;
-                                this.leftSecondaryTriggerAction();
-
-                            });
+                            if (squeezeComponent) {
+                                squeezeComponent.onButtonStateChangedObservable.add((stateObject: any) => {
+                                    if (!stateObject.pressed) return;
+                                    if (stateObject.value < 0.99) return;
+                                    this.leftSecondaryTriggerAction();
+                                });
+                            }
                             let thumbstickComponent = motionController.getComponent(xr_ids[2]);//xr-standard-thumbstick
-                            thumbstickComponent.onButtonStateChangedObservable.add(() => {
-                                if (thumbstickComponent.pressed) {
-                                } else {
-                                }
-                            });
-                            thumbstickComponent.onAxisValueChangedObservable.add((stateObject) => {
-                                //console.log("LeftPad axes ", stateObject);
-                                if (Math.abs(stateObject.y) > Math.abs(stateObject.x)) {
-                                    this.leftPadUpDownAction(stateObject.y);
-                                }
-                                else {
-                                    this.leftPadLeftRightAction(stateObject.x);
-                                }
-                            });
+                            if (thumbstickComponent) {
+                                thumbstickComponent.onButtonStateChangedObservable.add(() => {
+                                    if (thumbstickComponent.pressed) {
+                                    } else {
+                                    }
+                                });
+                                thumbstickComponent.onAxisValueChangedObservable.add((stateObject) => {
+                                    //console.log("LeftPad axes ", stateObject);
+                                    if (Math.abs(stateObject.y) > Math.abs(stateObject.x)) {
+                                        this.leftPadUpDownAction(stateObject.y);
+                                    }
+                                    else {
+                                        this.leftPadLeftRightAction(stateObject.x);
+                                    }
+                                });
+                            }
 
                             let xbuttonComponent = motionController.getComponent(xr_ids[3]);//x-button
-                            xbuttonComponent.onButtonStateChangedObservable.add((stateObject: any) => {
-                                interactionHandler.notifyRepeatableButton('x', stateObject);
-                            });
+                            if (xbuttonComponent) {
+                                xbuttonComponent.onButtonStateChangedObservable.add((stateObject: any) => {
+                                    interactionHandler.notifyRepeatableButton('x', stateObject);
+                                });
+                            }
                             let ybuttonComponent = motionController.getComponent(xr_ids[4]);//y-button
-                            ybuttonComponent.onButtonStateChangedObservable.add((stateObject: any) => {
-                                interactionHandler.notifyRepeatableButton('y', stateObject);
-                            });
+                            if (ybuttonComponent) {
+                                ybuttonComponent.onButtonStateChangedObservable.add((stateObject: any) => {
+                                    interactionHandler.notifyRepeatableButton('y', stateObject);
+                                });
+                            }
                         }
                         if (motionController.handness === 'right') {
                             this.rightController = controller;
@@ -1181,89 +1169,98 @@ export async function runBabySky() {
                             });
                             const xr_ids = motionController.getComponentIds();
                             let triggerComponent = motionController.getComponent(xr_ids[0]);//xr-standard-trigger
-                            triggerComponent.onButtonStateChangedObservable.add((stateObject) => {
-                                if (!stateObject.pressed) return;
-                                if (stateObject.value < 0.9) {
-                                    return;
-                                }
-                                let resultRay = new Ray(new Vector3(0,0,0),new Vector3(0,0,0));
-                                controller.getWorldPointerRayToRef(resultRay);
-                                //console.log("Pointer ray is:",resultRay.origin,resultRay.direction);
-            
+                            if (triggerComponent) {
+                                triggerComponent.onButtonStateChangedObservable.add((stateObject) => {
+                                    if (!stateObject.pressed) return;
+                                    if (stateObject.value < 0.9) {
+                                        return;
+                                    }
+                                    let resultRay = new Ray(new Vector3(0,0,0),new Vector3(0,0,0));
+                                    controller.getWorldPointerRayToRef(resultRay);
+                                    //console.log("Pointer ray is:",resultRay.origin,resultRay.direction);
+                
 
-                                //let vqr = grip!.rotationQuaternion!.clone();
-                                // console.log("Rotation of grip is:", vqr);
-/*
-                                console.log("Absolute rotation of grip is:", grip!.absoluteRotationQuaternion);
-                                console.log("Rotation of pointer is:", targetRay!.rotationQuaternion);
-                                console.log("Absolute rotation of pointer is:", targetRay!.absoluteRotationQuaternion);
-*/                                
-                                //let startVector = new Vector3(0, 0, -1);
-                                //let baseVector1 = startVector.rotateByQuaternionToRef(vqr, new Vector3(0, 0, 0));
-                                let baseVector = resultRay.direction;
-                                //pointsAt.position = baseVector.scale(1000);
-                                let nearby = Astro.nearestStar(
-                                    bScene.valueOf("latitude"),
-                                    bScene.valueOf("longitude"),
-                                    baseVector.x, baseVector.y, -baseVector.z, programTime.getCurrentProgramTimeAsAstroTime(),
-                                    bScene.valueOf("maxMag"));
-                                let nearbySolar = Astro.nearestSolarSystem(
-                                    solarSystemResult,
-                                    bScene.valueOf("latitude"),
-                                    bScene.valueOf("longitude"),
-                                    baseVector.x, baseVector.y, -baseVector.z, programTime.getCurrentProgramTimeAsAstroTime(),
-                                    bScene.valueOf("maxMag"));
-                                if (nearbySolar.distance < nearby.distance) {
-                                    bScene.changeState({
-                                        "eastText":
-                                            (nearbySolar.name) + " " + "[" + nearbySolar.ra + " " + nearbySolar.dec + "] mag:" + nearbySolar.mag
-                                    });
-                                    selectedStarText =
-                                        (nearbySolar.name) + " " + "[" + nearbySolar.ra + " " + nearbySolar.dec + "] mag:" + nearbySolar.mag;
-                                    console.log("Selected star:", selectedStarText);
-                                } else {
-                                    bScene.changeState({
-                                        "eastText":
-                                            (nearby.proper || "") + " " + nearby.name + "[" + nearby.ra + " " + nearby.dec + "] mag:" + nearby.mag
-                                    });
-                                    selectedStarText =
-                                        (nearby.proper || "") + " " + nearby.name + "[" + nearby.ra + " " + nearby.dec + "] mag:" + nearby.mag;
-                                    console.log("Selected star:", selectedStarText);
-                                }
+                                    //let vqr = grip!.rotationQuaternion!.clone();
+                                    // console.log("Rotation of grip is:", vqr);
+    /*
+                                    console.log("Absolute rotation of grip is:", grip!.absoluteRotationQuaternion);
+                                    console.log("Rotation of pointer is:", targetRay!.rotationQuaternion);
+                                    console.log("Absolute rotation of pointer is:", targetRay!.absoluteRotationQuaternion);
+    */                                
+                                    //let startVector = new Vector3(0, 0, -1);
+                                    //let baseVector1 = startVector.rotateByQuaternionToRef(vqr, new Vector3(0, 0, 0));
+                                    let baseVector = resultRay.direction;
+                                    //pointsAt.position = baseVector.scale(1000);
+                                    let nearby = Astro.nearestStar(
+                                        bScene.valueOf("latitude"),
+                                        bScene.valueOf("longitude"),
+                                        baseVector.x, baseVector.y, -baseVector.z, programTime.getCurrentProgramTimeAsAstroTime(),
+                                        bScene.valueOf("maxMag"));
+                                    let nearbySolar = Astro.nearestSolarSystem(
+                                        solarSystemResult,
+                                        bScene.valueOf("latitude"),
+                                        bScene.valueOf("longitude"),
+                                        baseVector.x, baseVector.y, -baseVector.z, programTime.getCurrentProgramTimeAsAstroTime(),
+                                        bScene.valueOf("maxMag"));
+                                    if (nearbySolar.distance < nearby.distance) {
+                                        bScene.changeState({
+                                            "eastText":
+                                                (nearbySolar.name) + " " + "[" + nearbySolar.ra + " " + nearbySolar.dec + "] mag:" + nearbySolar.mag
+                                        });
+                                        selectedStarText =
+                                            (nearbySolar.name) + " " + "[" + nearbySolar.ra + " " + nearbySolar.dec + "] mag:" + nearbySolar.mag;
+                                        console.log("Selected star:", selectedStarText);
+                                    } else {
+                                        bScene.changeState({
+                                            "eastText":
+                                                (nearby.proper || "") + " " + nearby.name + "[" + nearby.ra + " " + nearby.dec + "] mag:" + nearby.mag
+                                        });
+                                        selectedStarText =
+                                            (nearby.proper || "") + " " + nearby.name + "[" + nearby.ra + " " + nearby.dec + "] mag:" + nearby.mag;
+                                        console.log("Selected star:", selectedStarText);
+                                    }
 
-                            });
+                                });
+                            }
                             let squeezeComponent = motionController.getComponent(xr_ids[1]);//xr-standard-squeeze
-                            squeezeComponent.onButtonStateChangedObservable.add((stateObject) => {
-                                if (!stateObject.pressed) return;
-                                if (stateObject.value < 0.99) return;
-                                this.rightSecondaryTriggerAction();
-                            });
+                            if (squeezeComponent) {
+                                squeezeComponent.onButtonStateChangedObservable.add((stateObject) => {
+                                    if (!stateObject.pressed) return;
+                                    if (stateObject.value < 0.99) return;
+                                    this.rightSecondaryTriggerAction();
+                                });
+                            }
                             let thumbstickComponent = motionController.getComponent(xr_ids[2]);//xr-standard-thumbstick
-                            thumbstickComponent.onButtonStateChangedObservable.add(() => {
-                                if (thumbstickComponent.pressed) {
-                                } else {
-                                }
+                            if (thumbstickComponent) {
+                                thumbstickComponent.onButtonStateChangedObservable.add(() => {
+                                    if (thumbstickComponent.pressed) {
+                                    } else {
+                                    }
 
-                            });
-                            thumbstickComponent.onAxisValueChangedObservable.add((stateObject) => {
-                                //console.log("RightPad axes ", stateObject);
+                                });
+                                thumbstickComponent.onAxisValueChangedObservable.add((stateObject) => {
+                                    //console.log("RightPad axes ", stateObject);
 
-                                if (Math.abs(stateObject.y) > Math.abs(stateObject.x)) {
-                                    this.rightPadUpDownAction(stateObject.y);
-                                }
-                                else {
-                                    this.rightPadLeftRightAction(stateObject.x);
-                                }
-                            });
-
+                                    if (Math.abs(stateObject.y) > Math.abs(stateObject.x)) {
+                                        this.rightPadUpDownAction(stateObject.y);
+                                    }
+                                    else {
+                                        this.rightPadLeftRightAction(stateObject.x);
+                                    }
+                                });
+                            }
                             let abuttonComponent = motionController.getComponent(xr_ids[3]);//a-button
-                            abuttonComponent.onButtonStateChangedObservable.add((stateObject: any) => {
-                                interactionHandler.notifyRepeatableButton('a', stateObject);
-                            });
+                            if (abuttonComponent) {
+                                abuttonComponent.onButtonStateChangedObservable.add((stateObject: any) => {
+                                    interactionHandler.notifyRepeatableButton('a', stateObject);
+                                });
+                            }
                             let bbuttonComponent = motionController.getComponent(xr_ids[4]);//b-button
-                            bbuttonComponent.onButtonStateChangedObservable.add((stateObject: any) => {
-                                interactionHandler.notifyRepeatableButton('b', stateObject);
-                            });
+                            if (bbuttonComponent) {
+                                bbuttonComponent.onButtonStateChangedObservable.add((stateObject: any) => {
+                                    interactionHandler.notifyRepeatableButton('b', stateObject);
+                                });
+                            }
                         }
                     });
                 });
@@ -1396,16 +1393,20 @@ export async function runBabySky() {
             interactionHandler.keyBindings(evt.sourceEvent.key);
         }));
 
-        // let pointsAt = MeshBuilder.CreateSphere("pointsAt",{diameter:10},bScene.scene);
-        //pointsAt.position.x = 0;
-        //pointsAt.position.y = 0;
-        //pointsAt.position.z = 1000;
-        /* BLIX VR ONLY 
-           VRHelper.onControllerMeshLoaded.add((webVRController)=> {
-          interactionHandler.useController(webVRController);
+        scene.createDefaultXRExperienceAsync({}).then(xrHelper=>{
+            scene.activeCamera!.maxZ = starDistance * 3;
+            xrHelper.pointerSelection.dispose();
+            xrHelper.pointerSelection = <WebXRControllerPointerSelection>xrHelper.baseExperience.
+                featuresManager.enableFeature(WebXRFeatureName.POINTER_SELECTION, "latest", {
+                    xrInput: xrHelper.input,
+                    disableSwitchOnClick: false,
+                    maxPointerDistance: Infinity,
+                });
+            xrHelper.pointerSelection.laserPointerDefaultColor = new Color3(0.5, 0.2, 0.1);
+            xrHelper.pointerSelection.displayLaserPointer = true;
+            xrHelper.pointerSelection.displaySelectionMesh = true;
+            interactionHandler.enableControllers(xrHelper);
         });
-        */
-        interactionHandler.enableControllers();
 
         return { scene: scene, engine: engine };
     };
