@@ -220,6 +220,7 @@ export async function runBabySky() {
     scene.clearColor = new Color4(0, 0, 0, 1);
     scene.blockMaterialDirtyMechanism = true;
     let camera = new UniversalCamera("UniversalCamera", new Vector3(0, 0, 0), scene);
+    camera.attachControl(canvas,true);
     scene.activeCamera = camera;
 
     scene.registerBeforeRender(function onceOnly() {
