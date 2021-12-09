@@ -294,9 +294,16 @@ const blackbodyColor = function(temp:number) {
   }
   
   const ans = blackbody[t]; 
-  const redval = ((0xff0000 & ans)  >>> 16) ;
-  const greenval = ((0x00ff00 & ans)  >>> 8);
-  const blueval = (0x0000ff & ans)  ;
+  let redval = ((0xff0000 & ans)  >>> 16) ;
+  let greenval = ((0x00ff00 & ans)  >>> 8);
+  let blueval = (0x0000ff & ans)  ;
+  // exaggerate the colours for effect
+  redval = 255 - 1.5*(255-redval);
+  greenval =255 - 1.5*(255-greenval);
+  blueval = 255 - 1.5*(255-blueval)
+  if (redval < 0) { redval = 0;}
+  if (greenval < 0) {greenval = 0;}
+  if (blueval < 0) {blueval = 0;}
   return ([redval,greenval,blueval]);
 };
 // convert the colour index to a temperature

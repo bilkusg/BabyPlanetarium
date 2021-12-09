@@ -5,7 +5,8 @@ import * as Constellations from "../astro/constellations";
 import * as BabyLife from "..//babylife/babylife";
 import * as SaturnRings from "../astro/saturnrings";
 import * as Arcs from "./arcs";
-import {WebXRMotionControllerManager,Quaternion,Engine,Scene,Color3,Color4,Vector3,WebXRDefaultExperience,
+import {
+    WebXRMotionControllerManager, Quaternion, Engine, Scene, Color3, Color4, Vector3, WebXRDefaultExperience,
     WebXRControllerPointerSelection,
     WebXRFeatureName,
     UniversalCamera,
@@ -13,10 +14,10 @@ import {WebXRMotionControllerManager,Quaternion,Engine,Scene,Color3,Color4,Vecto
     TransformNode,
     Axis,
     MeshBuilder,
-    StandardMaterial,PointLight,Light,Mesh,SceneLoader,
-    Texture,DirectionalLight,Ray,ActionManager,ExecuteCodeAction, CreateGroundVertexData, GroundBuilder, WebXRExperienceHelper
-}  from "@babylonjs/core";
-import {AdvancedDynamicTexture,Grid,Control,Button,TextBlock}   from "@babylonjs/gui";
+    StandardMaterial, PointLight, Light, Mesh, SceneLoader,
+    Texture, DirectionalLight, Ray, ActionManager, ExecuteCodeAction, CreateGroundVertexData, GroundBuilder, WebXRExperienceHelper
+} from "@babylonjs/core";
+import { AdvancedDynamicTexture, Grid, Control, Button, TextBlock } from "@babylonjs/gui";
 import { SkyMaterial } from "@babylonjs/materials";
 import "@babylonjs/loaders";
 import "@babylonjs/core/Debug/debugLayer";
@@ -26,7 +27,109 @@ import "@babylonjs/inspector";
 //import { WebXROculusTouchMotionController } from "@babylonjs/core/XR/motionController/webXROculusTouchMotionController";
 // prioritize the local classes (but use online if controller not found)
 //WebXRMotionControllerManager.PrioritizeOnlineRepository = false;
+// Timing:
+// We want to be able to use a consistent point in time for our calculations of position &c, and this is the
+// currentProgramTime variable. This is updated by a tick function in one of the components.
+// Our challenge is that we don't want the program time to necessarily be the same as real time
+// We may want an offset start time
+// We may want time to run slower faster than usual or even backwards
+// So the following functions take care of all that
 
+class ProgramTime {
+    nTimeIncrements: number = 10;
+    timeIncrementTexts = ["stop", "1s", "1m", "10m", "1h", "1sidDay", "1Day", "1mth", "1sidYr", "1Yr"];
+    timeIncrementIndex = 3;
+    timeIncrements: Array<number>;
+    currentSpeedIndex: number;
+    programStartTime: Date;
+    initialProgramTime: Date;
+    currentProgramTime: Date
+    currentAstroTime: Astro.AstroTime
+    constructor(startDate: Date, daysOffset: number, hoursOffset: number, speedIndex: number) {
+        this.timeIncrements = [
+            0,
+            1,
+            60,
+            600,
+            3600,
+            86164.1,
+            3600 * 24,
+            3600 * 24 * 30,
+            31558149.504,
+            3600 * 24 * 365];
+        this.currentSpeedIndex = speedIndex;
+        this.programStartTime = new Date();
+        this.initialProgramTime = startDate ? startDate : this.programStartTime;
+        this.initialProgramTime = new Date(
+            this.initialProgramTime.getTime() + (1000 * 3600 * (daysOffset * 24 + hoursOffset))
+        );
+        this.currentProgramTime = this.initialProgramTime;
+        this.currentAstroTime = new Astro.AstroTime(this.currentProgramTime);
+    }
+    setSpeed(s: number) {
+        if (this.currentSpeedIndex == s) return;
+        this.setProgramTime();
+        this.currentSpeedIndex = s;
+        this.programStartTime = new Date();
+        this.initialProgramTime = this.currentProgramTime;
+        this.setProgramTime();
+        return;
+    }
+    setSpeedFromIncrement() {
+        this.setSpeed(this.timeIncrementIndex);
+    }
+    stopSpeed() {
+        this.setSpeed(0);
+    }
+    speedFactor() {
+        if (this.currentSpeedIndex >= 0) return this.timeIncrements[this.currentSpeedIndex];
+        return -this.timeIncrements[-this.currentSpeedIndex];
+    }
+    setTimeIncrement(n: number) {
+        if (n > this.nTimeIncrements - 1) { }
+        else if (n <= 0) { }
+        else {
+            this.timeIncrementIndex = n;
+        }
+    }
+    applyTimeIncrementForward() {
+        this.initialProgramTime = new Date(this.initialProgramTime.getTime() + this.timeIncrement() * 1000);
+    }
+    applyTimeIncrementBackward() {
+        this.initialProgramTime = new Date(this.initialProgramTime.getTime() - this.timeIncrement() * 1000);
+    }
+    fasterIncrement() {
+        this.timeIncrementIndex = this.timeIncrementIndex + 1;
+        if (this.timeIncrementIndex == this.nTimeIncrements) {
+            this.timeIncrementIndex = 1;
+        }
+    }
+    timeIncrement() {
+        return this.timeIncrements[this.timeIncrementIndex];
+    }
+    timeIncrementText() {
+        return this.timeIncrementTexts[this.timeIncrementIndex];
+    }
+    // This function updates currentProgramTime from the elapsed time and the speed
+    setProgramTime() {
+        const d = new Date();
+        let elapsed = d.getTime() - this.programStartTime.getTime();
+        elapsed = elapsed - (elapsed % 1000); // count in seconds
+        this.currentProgramTime = new Date(this.initialProgramTime.getTime() + this.speedFactor() * elapsed);
+        this.currentAstroTime = new Astro.AstroTime(this.currentProgramTime);
+        return this.currentProgramTime;
+    }
+    getCurrentProgramTime(): number {
+        return this.currentProgramTime.getTime();
+    }
+    getCurrentProgramTimeAsDate() {
+        return this.currentProgramTime;
+    }
+    getCurrentProgramTimeAsAstroTime() {
+        return this.currentAstroTime;
+    }
+    // This function allows the speed of time passing to be changed during program execution needs to be fixed BLIXBLIX
+};
 
 export async function runBabySky() {
     const DegsPerRad = Astro.DegsPerRad;
@@ -52,7 +155,7 @@ export async function runBabySky() {
     const defaultMinMag = numericParamWithDefault("minMag", -4.0);
     const defaultMaxMag = numericParamWithDefault("maxMag", 5.5);
     const defaultSpeed = numericParamWithDefault("speed", 0);
-    const defaultPlanetMult = numericParamWithDefault("planetMult", 1000); //normally 1
+    const defaultPlanetMult = numericParamWithDefault("planetMult", 1); //normally 1
     const defaultAuScaling = numericParamWithDefault("auScaling", 1.0E-8);
     const useLogarithmic = !!numericParamWithDefault("useLogarithmic", 0);
     const moonFudge = 100.0;
@@ -80,109 +183,7 @@ export async function runBabySky() {
     // its own light source from exactly the right direction. We can't use a single point light because we scale different objects (moon, planets) 
     // differently.
 
-    // Timing:
-    // We want to be able to use a consistent point in time for our calculations of position &c, and this is the
-    // currentProgramTime variable. This is updated by a tick function in one of the components.
-    // Our challenge is that we don't want the program time to necessarily be the same as real time
-    // We may want an offset start time
-    // We may want time to run slower faster than usual or even backwards
-    // So the following functions take care of all that
 
-    class ProgramTime {
-        nTimeIncrements: number = 10;
-        timeIncrementTexts = ["stop", "1s", "1m", "10m", "1h", "1sidDay", "1Day", "1mth", "1sidYr", "1Yr"];
-        timeIncrementIndex = 3;
-        timeIncrements: Array<number>;
-        currentSpeedIndex: number;
-        programStartTime: Date;
-        initialProgramTime: Date;
-        currentProgramTime: Date
-        currentAstroTime: Astro.AstroTime
-        constructor(startDate: Date, daysOffset: number, hoursOffset: number, speedIndex: number) {
-            this.timeIncrements = [
-                0,
-                1,
-                60,
-                600,
-                3600,
-                86164.1,
-                3600 * 24,
-                3600 * 24 * 30,
-                31558149.504,
-                3600 * 24 * 365];
-            this.currentSpeedIndex = speedIndex;
-            this.programStartTime = new Date();
-            this.initialProgramTime = startDate ? startDate : this.programStartTime;
-            this.initialProgramTime = new Date(
-                this.initialProgramTime.getTime() + (1000 * 3600 * (daysOffset * 24 + hoursOffset))
-            );
-            this.currentProgramTime = this.initialProgramTime;
-            this.currentAstroTime = new Astro.AstroTime(this.currentProgramTime);
-        }
-        setSpeed(s: number) {
-            if (this.currentSpeedIndex == s) return;
-            this.setProgramTime();
-            this.currentSpeedIndex = s;
-            this.programStartTime = new Date();
-            this.initialProgramTime = this.currentProgramTime;
-            this.setProgramTime();
-            return;
-        }
-        setSpeedFromIncrement() {
-            this.setSpeed(this.timeIncrementIndex);
-        }
-        stopSpeed() {
-            this.setSpeed(0);
-        }
-        speedFactor() {
-            if (this.currentSpeedIndex >= 0) return this.timeIncrements[this.currentSpeedIndex];
-            return -this.timeIncrements[-this.currentSpeedIndex];
-        }
-        setTimeIncrement(n: number) {
-            if (n > this.nTimeIncrements - 1) { }
-            else if (n <= 0) { }
-            else {
-                this.timeIncrementIndex = n;
-            }
-        }
-        applyTimeIncrementForward() {
-            this.initialProgramTime = new Date(this.initialProgramTime.getTime() + this.timeIncrement() * 1000);
-        }
-        applyTimeIncrementBackward() {
-            this.initialProgramTime = new Date(this.initialProgramTime.getTime() - this.timeIncrement() * 1000);
-        }
-        fasterIncrement() {
-            this.timeIncrementIndex = this.timeIncrementIndex + 1;
-            if (this.timeIncrementIndex == this.nTimeIncrements) {
-                this.timeIncrementIndex = 1;
-            }
-        }
-        timeIncrement() {
-            return this.timeIncrements[this.timeIncrementIndex];
-        }
-        timeIncrementText() {
-            return this.timeIncrementTexts[this.timeIncrementIndex];
-        }
-        // This function updates currentProgramTime from the elapsed time and the speed
-        setProgramTime() {
-            const d = new Date();
-            let elapsed = d.getTime() - this.programStartTime.getTime();
-            elapsed = elapsed - (elapsed % 1000); // count in seconds
-            this.currentProgramTime = new Date(this.initialProgramTime.getTime() + this.speedFactor() * elapsed);
-            this.currentAstroTime = new Astro.AstroTime(this.currentProgramTime);
-            return this.currentProgramTime;
-        }
-        getCurrentProgramTime() {
-            return this.currentProgramTime.getTime();
-        }
-        getCurrentProgramTimeAsDate() {
-            return this.currentProgramTime;
-        }
-        getCurrentProgramTimeAsAstroTime() {
-            return this.currentAstroTime;
-        }
-        // This function allows the speed of time passing to be changed during program execution needs to be fixed BLIXBLIX
-    };
     let programTime = new ProgramTime(explicitStartDate, defaultDaysOffset, defaultHoursOffset, defaultSpeed);
     const sceneParameters = {
         auScaling: defaultAuScaling,
@@ -220,7 +221,8 @@ export async function runBabySky() {
     scene.clearColor = new Color4(0, 0, 0, 1);
     scene.blockMaterialDirtyMechanism = true;
     let camera = new UniversalCamera("UniversalCamera", new Vector3(0, 0, 0), scene);
-    camera.attachControl(canvas,true);
+    camera.maxZ = starDistance * 3;
+    camera.attachControl(canvas, true);
     scene.activeCamera = camera;
 
     scene.registerBeforeRender(function onceOnly() {
@@ -419,21 +421,20 @@ export async function runBabySky() {
             async function loadSaturn(me: BabyLife.BabyEntity, bScene: BabyLife.BabyScene) {
                 let meshesSoFar = bScene.scene.meshes;
                 console.log("Load saturn starts");
-                let r=
-                  await SceneLoader.LoadAsync("models/","saturn2.obj");
+                let r =
+                    await SceneLoader.LoadAsync("models/", "saturn2.obj");
                 me.mesh = r.getMeshByID("Saturn2");
                 me.mesh.setParent(me.parent!.mesh);
                 let totMeshesNow = r.meshes;
-                for (let i = meshesSoFar;i< totMeshesNow;i++)
-                {
-                  let m = r.meshes[i];
-                  if ( m !== me.mesh) {
-                    console.log(m.parent);
-                    m.setParent(me.mesh);
-                  }
+                for (let i = meshesSoFar; i < totMeshesNow; i++) {
+                    let m = r.meshes[i];
+                    if (m !== me.mesh) {
+                        console.log(m.parent);
+                        m.setParent(me.mesh);
+                    }
                 }
                 me.data.factor = fudgeFactor / 200;
-                
+
                 // OBJFileLoader.MATERIAL_LOADING_FAILS_SILENTLY = false;
                 let s =
                     await SceneLoader.ImportMeshAsync("", "models/", "saturn2.obj");
@@ -447,10 +448,10 @@ export async function runBabySky() {
                 });
                 me.data.factor = fudgeFactor / 2;
                 s.meshes.forEach(m => {
-                   // console.log(m.name, m);
+                    // console.log(m.name, m);
                 });
             }
-            console.log("createPlanet:",name);
+            console.log("createPlanet:", name);
             let bPlanet = new BabyLife.BabyEntity(bScene, bSky);
             if (!rotateAtTime0) {
                 rotateAtTime0 = 0;
@@ -487,15 +488,15 @@ export async function runBabySky() {
                 me.data.light.includedOnlyMeshes.push(me.mesh);
                 me.data.light.intensity = intensity;
                 // me.data.light.fallofType = Light.FALLOFF_STANDARD;
-            
+
                 if (name === "Saturn") {
                     me.data.rings = SaturnRings.createRings(bScene.scene, fudgeFactor * planet.body.radius * 5, useLogarithmic);
-                    me.data.light.includedOnlyMeshes.push(me.data.rings); 
+                    me.data.light.includedOnlyMeshes.push(me.data.rings);
                     me.data.rings.setParent(me.mesh);
                     me.data.rings.position.x = 0;
                     me.data.rings.position.y = 0;
                     me.data.rings.position.z = 0;
-                    me.data.rings.rotation.x = 270/ DegsPerRad;
+                    me.data.rings.rotation.x = 270 / DegsPerRad;
                     me.data.rings.scaling.x = 70.0;
                     me.data.rings.scaling.y = 70.0;
                     me.data.rings.scaling.z = 70.0;
@@ -558,10 +559,10 @@ export async function runBabySky() {
         });
         let lasertarget = new BabyLife.BabyEntity(bScene);
         // lasertarget.dependsOn(["labelsVisible"]);
-        lasertarget.setInit((me,bScene)=>{
-            let sphere = MeshBuilder.CreateSphere("lasertarget",{diameter: 2000},bScene.scene);
+        lasertarget.setInit((me, bScene) => {
+            let sphere = MeshBuilder.CreateSphere("lasertarget", { diameter: 2000 }, bScene.scene);
             sphere.isPickable = true;
-        }); 
+        });
         let bKeyboard = new BabyLife.BabyEntity(bScene);
         bKeyboard.dependsOn(["labelsVisible"]);
         bKeyboard.setInit((me, bScene) => {
@@ -822,42 +823,42 @@ export async function runBabySky() {
         let bFloor = new BabyLife.BabyEntity(bScene);
         bFloor.dependsOn(["floorVisible"]);
         bFloor.setInit((me, bScene) => {
-          let terrainTexture = new Texture("textures/grass.jpg",bScene.scene);
-          let terrainMaterial = new StandardMaterial("floor",bScene.scene);
-          terrainMaterial.diffuseTexture = terrainTexture;
-          let ground = MeshBuilder.CreateGround("ground",{width:2000,height:2000},bScene.scene);
-          terrainTexture.uScale = 2000;
-          terrainTexture.vScale = 2000;
-          ground.material = terrainMaterial;
-          
-          me.data.terrain = {mesh:ground};
-          /* Unfortunately the dynamic terrain doesn't play well with ES6 and I haven't yet fixed that
-             so for now the ground is just a boring repeating grass like pattern
-          var createTerrain = function(mapData:any,mapSubX:any,mapSubZ:any) {
-            me.data.terrain = new DynamicTerrain('t', {
-              mapData:mapData,
-              mapSubX:mapSubX,
-              mapSubZ:mapSubZ,
-              terrainSub:120
-            },bScene.scene);
+            let terrainTexture = new Texture("textures/grass.jpg", bScene.scene);
+            let terrainMaterial = new StandardMaterial("floor", bScene.scene);
+            terrainMaterial.diffuseTexture = terrainTexture;
+            let ground = MeshBuilder.CreateGround("ground", { width: 2000, height: 2000 }, bScene.scene);
+            terrainTexture.uScale = 2000;
+            terrainTexture.vScale = 2000;
+            ground.material = terrainMaterial;
+
+            me.data.terrain = { mesh: ground };
+            /* Unfortunately the dynamic terrain doesn't play well with ES6 and I haven't yet fixed that
+               so for now the ground is just a boring repeating grass like pattern
+            var createTerrain = function(mapData:any,mapSubX:any,mapSubZ:any) {
+              me.data.terrain = new DynamicTerrain('t', {
+                mapData:mapData,
+                mapSubX:mapSubX,
+                mapSubZ:mapSubZ,
+                terrainSub:120
+              },bScene.scene);
+              
+              me.data.terrain.createUVMap();
+              me.data.terrain.mesh.material = terrainMaterial;
+              me.data.terrain.update(true);
             
-            me.data.terrain.createUVMap();
-            me.data.terrain.mesh.material = terrainMaterial;
-            me.data.terrain.update(true);
-          
-          }
-          var hmURL = "https://www.babylonjs-playground.com/textures/worldHeightMap.jpg";
-          var mapWidth = 1000;
-          var mapHeight = 1000;
-          var nbPoints = 500;
-          var hmOptions = {
-            width:mapWidth,height:mapHeight,subX:nbPoints,subZ:nbPoints,
-            onReady:createTerrain,
-            offsetX:0,offsetZ:-250,
-          };
-          var mapData = new Float32Array(nbPoints*nbPoints*3);
-          DynamicTerrain.CreateMapFromHeightMapToRef(hmURL,hmOptions,mapData,bScene.scene);
-          */
+            }
+            var hmURL = "https://www.babylonjs-playground.com/textures/worldHeightMap.jpg";
+            var mapWidth = 1000;
+            var mapHeight = 1000;
+            var nbPoints = 500;
+            var hmOptions = {
+              width:mapWidth,height:mapHeight,subX:nbPoints,subZ:nbPoints,
+              onReady:createTerrain,
+              offsetX:0,offsetZ:-250,
+            };
+            var mapData = new Float32Array(nbPoints*nbPoints*3);
+            DynamicTerrain.CreateMapFromHeightMapToRef(hmURL,hmOptions,mapData,bScene.scene);
+            */
         });
         bFloor.setUpdate((me, bScene) => {
             let showFloor = bScene.valueOf("floorVisible");
@@ -1176,18 +1177,18 @@ export async function runBabySky() {
                                     if (stateObject.value < 0.9) {
                                         return;
                                     }
-                                    let resultRay = new Ray(new Vector3(0,0,0),new Vector3(0,0,0));
+                                    let resultRay = new Ray(new Vector3(0, 0, 0), new Vector3(0, 0, 0));
                                     controller.getWorldPointerRayToRef(resultRay);
                                     //console.log("Pointer ray is:",resultRay.origin,resultRay.direction);
-                
+
 
                                     //let vqr = grip!.rotationQuaternion!.clone();
                                     // console.log("Rotation of grip is:", vqr);
-    /*
-                                    console.log("Absolute rotation of grip is:", grip!.absoluteRotationQuaternion);
-                                    console.log("Rotation of pointer is:", targetRay!.rotationQuaternion);
-                                    console.log("Absolute rotation of pointer is:", targetRay!.absoluteRotationQuaternion);
-    */                                
+                                    /*
+                                                                    console.log("Absolute rotation of grip is:", grip!.absoluteRotationQuaternion);
+                                                                    console.log("Rotation of pointer is:", targetRay!.rotationQuaternion);
+                                                                    console.log("Absolute rotation of pointer is:", targetRay!.absoluteRotationQuaternion);
+                                    */
                                     //let startVector = new Vector3(0, 0, -1);
                                     //let baseVector1 = startVector.rotateByQuaternionToRef(vqr, new Vector3(0, 0, 0));
                                     let baseVector = resultRay.direction;
@@ -1394,8 +1395,7 @@ export async function runBabySky() {
             interactionHandler.keyBindings(evt.sourceEvent.key);
         }));
 
-        scene.createDefaultXRExperienceAsync({}).then(xrHelper=>{
-            scene.activeCamera!.maxZ = starDistance * 3;
+        scene.createDefaultXRExperienceAsync({}).then(xrHelper => {
             xrHelper.baseExperience.camera.maxZ = starDistance * 3;
             xrHelper.pointerSelection.dispose();
             xrHelper.pointerSelection = <WebXRControllerPointerSelection>xrHelper.baseExperience.
