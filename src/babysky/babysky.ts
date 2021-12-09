@@ -1396,6 +1396,7 @@ export async function runBabySky() {
 
         scene.createDefaultXRExperienceAsync({}).then(xrHelper=>{
             scene.activeCamera!.maxZ = starDistance * 3;
+            xrHelper.baseExperience.camera.maxZ = starDistance * 3;
             xrHelper.pointerSelection.dispose();
             xrHelper.pointerSelection = <WebXRControllerPointerSelection>xrHelper.baseExperience.
                 featuresManager.enableFeature(WebXRFeatureName.POINTER_SELECTION, "latest", {
