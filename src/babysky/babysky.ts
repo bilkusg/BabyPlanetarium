@@ -226,9 +226,15 @@ export async function runBabySky() {
         scene.unregisterBeforeRender(onceOnly);
     });
 
+    //scene.activeCamera = camera;
+    let camera = new UniversalCamera("UniversalCamera", new Vector3(0, 0, 0), scene);
+    camera.maxZ = starDistance * 3;
+
     let xrHelper: WebXRDefaultExperience | null = null;
-    if (true) {
-        xrHelper = await scene.createDefaultXRExperienceAsync({});
+    scene.createDefaultXRExperienceAsync({}).then(xr=>{
+
+        xrHelper = xr;
+        xrHelper.baseExperience.camera!.maxZ = starDistance * 3;
         scene.activeCamera!.maxZ = starDistance * 3;
         xrHelper.pointerSelection.dispose();
         xrHelper.pointerSelection = <WebXRControllerPointerSelection>xrHelper.baseExperience.
@@ -242,13 +248,7 @@ export async function runBabySky() {
         xrHelper.pointerSelection.displayLaserPointer = true;
         xrHelper.pointerSelection.displaySelectionMesh = true;
 
-    } else {
-        // not using vr for testing doesn't work at this point
-        let camera = new UniversalCamera("UniversalCamera", new Vector3(0, 0, 0), scene);
-        scene.activeCamera = camera;
-    }
- 
-
+    });
     // The scene creation function
     const buildSkyScene = async function (engine: Engine, scene: Scene) {
         // SceneOptimizer.OptimizeAsync(scene);
